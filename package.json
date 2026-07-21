@@ -1,0 +1,15 @@
+{
+  "name": "rando-users-app",
+  "version": "1.0.0",
+  "description": "Page listant les utilisateurs de la base Supabase du projet Rando",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
