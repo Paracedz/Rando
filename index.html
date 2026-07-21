@@ -1,1 +1,67 @@
-<html><boby>TEST</body></html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rando</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e5631 0%, #2f7a4d 40%, #a3c96b 100%);
+    font-family: 'Segoe UI', Verdana, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  .container {
+    text-align: center;
+    padding: 2.5rem 3rem;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    animation: fadeIn 1.2s ease-out;
+  }
+
+  .icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+  }
+
+  h1 {
+    color: #ffffff;
+    font-size: 2.2rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin: 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  p {
+    color: #eafbe7;
+    font-size: 1.1rem;
+    margin-top: 0.8rem;
+    opacity: 0.9;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">🥾</div>
+    <h1>Traceur bientôt disponible</h1>
+    <p>Préparez vos chaussures, l'aventure arrive !</p>
+  </div>
+</body>
+</html>
