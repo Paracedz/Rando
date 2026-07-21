@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Traceur — Prépare tes étapes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#F1ECDD;
+  --paper-deep:#E6DDC5;
+  --ink:#1E2822;
+  --ink-soft:#4B5A50;
+  --forest:#2E4A38;
+  --forest-deep:#1F3527;
+  --moss:#6B8F71;
+  --contour:#B6A984;
+  --amber:#C9752E;
+  --clay:#A5432E;
+  --gold:#D9A441;
+  --line:#D8CFB2;
+  --white:#FBF9F2;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:'Inter',sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
+}
+
+/* ---------- header ---------- */
+header{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:14px 22px;
+  background:var(--forest-deep);
+  color:var(--white);
+  border-bottom:3px solid var(--gold);
+  z-index:20;
+  flex-wrap:wrap;
+  row-gap:10px;
+}
+header .brand{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+header h1{
+  font-family:'Fraunces',serif;
+  font-weight:600;
+  font-size:22px;
+  margin:0;
+  letter-spacing:.3px;
+}
+header .tagline{
+  font-size:11.5px;
+  color:#C9D6C9;
+  text-transform:uppercase;
+  letter-spacing:1.4px;
+}
+.spacer{flex:1;}
+.btn{
+  font-family:'Inter',sans-serif;
+  font-weight:600;
+  font-size:13px;
+  border:1.5px solid transparent;
+  border-radius:7px;
+  padding:9px 15px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  transition:transform .12s ease, background .15s ease, border-color .15s ease;
+  white-space:nowrap;
+}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--amber);color:var(--white);}
+.btn-primary:hover{background:#B76824;}
+.btn-ghost{background:transparent;color:var(--white);border-color:rgba(255,255,255,.35);}
+.btn-ghost:hover{border-color:#fff;}
+.btn-outline{background:var(--white);color:var(--forest-deep);border-color:var(--line);}
+.btn-outline:hover{border-color:var(--forest);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+#fileInput{display:none;}
+
+.mode-switch{
+  display:flex;
+  border:1.5px solid rgba(255,255,255,.35);
+  border-radius:8px;
+  overflow:hidden;
+  flex-shrink:0;
+}
+.mode-btn{
+  background:transparent;
+  color:#C9D6C9;
+  border:none;
+  padding:8px 14px;
+  font-family:'Inter',sans-serif;
+  font-size:12.5px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+  white-space:nowrap;
+}
+.mode-btn.active{background:var(--amber); color:#fff;}
+.mode-btn:not(.active):hover{background:rgba(255,255,255,.14); color:#fff;}
+
+.mode-controls{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.mode-controls select{
+  padding:8px 10px;
+  border-radius:7px;
+  border:1.5px solid rgba(255,255,255,.35);
+  background:var(--forest-deep);
+  color:#fff;
+  font-family:'Inter',sans-serif;
+  font-size:12.5px;
+  max-width:220px;
+}
+.mode-controls select:disabled{opacity:.5;}
+.base-gpx-hint{
+  font-size:11.5px;
+  color:#F3D9B1;
+  max-width:460px;
+  line-height:1.4;
+}
+.base-gpx-hint code{
+  background:rgba(255,255,255,.15);
+  padding:1px 5px;
+  border-radius:4px;
+  font-family:'IBM Plex Mono',monospace;
+}
+
+/* ---------- layout ---------- */
+.layout{
+  flex:1;
+  display:flex;
+  min-height:0;
+}
+aside{
+  width:340px;
+  min-width:340px;
+  background:var(--paper-deep);
+  border-right:1px solid var(--line);
+  overflow-y:auto;
+  padding:18px 16px 40px;
+}
+main{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+#map{position:absolute; inset:0; height:100%; width:100%;}
+#elevWrap{
+  height:150px;
+  background:var(--white);
+  border-top:1px solid var(--line);
+  padding:0 14px 6px;
+  position:relative;
+  transition:height .18s ease;
+  flex-shrink:0;
+}
+#elevWrap.collapsed{height:34px; padding-bottom:0; overflow:hidden;}
+.elev-header{
+  display:flex; align-items:center; gap:10px;
+  height:34px;
+}
+.elev-title{font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); font-weight:600;}
+.elev-hover-info{
+  font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600;
+  color:var(--forest-deep); background:var(--paper); border:1px solid var(--line);
+  border-radius:5px; padding:1px 8px; min-height:18px;
+}
+.elev-spacer{flex:1;}
+.mini-btn{
+  width:24px; height:24px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:1.3px solid var(--line); background:var(--paper); border-radius:6px;
+  color:var(--forest-deep); cursor:pointer; padding:0;
+  transition:background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.mini-btn:hover{background:var(--forest); border-color:var(--forest); color:#fff;}
+#elevBody{height:calc(100% - 34px); position:relative;}
+#elevWrap.collapsed #elevBody{display:none;}
+.elev-tooltip{
+  position:absolute;
+  pointer-events:none;
+  background:var(--ink);
+  color:#fff;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  font-weight:600;
+  padding:3px 8px;
+  border-radius:5px;
+  white-space:nowrap;
+  opacity:0;
+  transition:opacity .1s ease;
+  z-index:30;
+  box-shadow:0 3px 8px rgba(0,0,0,.25);
+}
+
+.map-toggle-btn{
+  position:absolute; top:10px; right:10px; z-index:900;
+  width:34px; height:34px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--white); border:1.5px solid var(--line); border-radius:8px;
+  color:var(--forest-deep); cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.2);
+  transition:background .15s ease, transform .12s ease;
+}
+.map-toggle-btn:hover{background:var(--paper-deep);}
+.map-toggle-btn:active{transform:translateY(1px);}
+.layout.map-expanded aside{display:none;}
+.layout.map-expanded #elevWrap{display:none;}
+
+/* ---------- cards ---------- */
+.card{
+  background:var(--white);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:14px 15px;
+  margin-bottom:16px;
+}
+.card h2{
+  font-family:'Fraunces',serif;
+  font-size:14px;
+  font-weight:600;
+  margin:0 0 10px;
+  color:var(--forest-deep);
+  display:flex;
+  align-items:center;
+  gap:7px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
+.eyebrow{
+  font-size:10.5px;
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  font-weight:600;
+  margin-bottom:4px;
+}
+
+.stat-row{display:flex; gap:10px;}
+.stat{
+  flex:1;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:10px 10px;
+  text-align:center;
+}
+.stat .val{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:19px;
+  font-weight:600;
+  color:var(--forest-deep);
+}
+.stat .val small{font-size:11px; font-weight:500; color:var(--ink-soft);}
+.stat .lbl{font-size:10.5px; color:var(--ink-soft); margin-top:2px; text-transform:uppercase; letter-spacing:.6px;}
+.stat.plus .val{color:var(--forest);}
+.stat.minus .val{color:var(--clay);}
+
+.field-row{display:flex; align-items:center; gap:8px; margin-top:10px;}
+.field-row label{font-size:12.5px; color:var(--ink-soft); flex:1;}
+.field-row input[type=number]{
+  width:56px;
+  padding:6px 7px;
+  border:1.5px solid var(--line);
+  border-radius:6px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  text-align:center;
+}
+
+.actions{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+
+table.segs{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px;}
+table.segs th{
+  text-align:left;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:var(--ink-soft);
+  border-bottom:1.5px solid var(--line);
+  padding:4px 4px 6px;
+}
+table.segs td{padding:6px 4px; border-bottom:1px solid var(--line); font-family:'IBM Plex Mono',monospace;}
+table.segs tr:last-child td{border-bottom:none;}
+.seg-dot{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle;}
+.seg-num{font-family:'Inter',sans-serif; font-weight:600;}
+.dl-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px;
+  border:1.3px solid var(--line);
+  background:var(--paper);
+  border-radius:6px;
+  color:var(--forest-deep);
+  cursor:pointer;
+  padding:0;
+  transition:background .15s ease, border-color .15s ease, transform .12s ease;
+}
+.dl-btn:hover{background:var(--forest); border-color:var(--forest); color:#fff;}
+.dl-btn:active{transform:translateY(1px);}
+.row-actions{display:flex; gap:5px;}
+.del-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px;
+  border:1.3px solid var(--line);
+  background:var(--paper);
+  border-radius:6px;
+  color:var(--clay);
+  cursor:pointer;
+  padding:0;
+  transition:background .15s ease, border-color .15s ease, transform .12s ease;
+}
+.del-btn:hover{background:var(--clay); border-color:var(--clay); color:#fff;}
+.del-btn:active{transform:translateY(1px);}
+
+.empty-hint{
+  font-size:12.5px;
+  color:var(--ink-soft);
+  line-height:1.5;
+}
+.help{font-size:11.5px; color:var(--ink-soft); margin-top:6px; line-height:1.45;}
+
+
+/* map empty overlay */
+.map-empty{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+  z-index:15;
+}
+.map-empty-inner{
+  background:rgba(251,249,242,.94);
+  border:1.5px dashed var(--contour);
+  border-radius:12px;
+  padding:26px 34px;
+  text-align:center;
+  max-width:340px;
+  pointer-events:auto;
+}
+.map-empty-inner h3{font-family:'Fraunces',serif; margin:0 0 6px; font-size:18px; color:var(--forest-deep);}
+.map-empty-inner p{margin:0; font-size:13px; color:var(--ink-soft); line-height:1.5;}
+
+/* leaflet marker labels */
+.trk-pin{
+  border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 5px rgba(0,0,0,.35);
+  border:2px solid var(--white);
+}
+.trk-pin span{transform:rotate(45deg); font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:11px; color:#fff;}
+.trk-pin.start{background:var(--forest);}
+.trk-pin.end{background:var(--clay);}
+.trk-pin.bound{background:var(--forest-deep); width:22px!important; height:22px!important;}
+.trk-pin.bound span{font-size:9.5px;}
+
+/* elevation svg */
+#elevSvg{width:100%; height:100%; display:block;}
+
+.save-row{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:7px 0; border-bottom:1px solid var(--line);
+}
+.save-row:last-child{border-bottom:none;}
+.save-info{min-width:0;}
+.save-label{font-size:12.5px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.save-time{font-size:10.5px; color:var(--ink-soft);}
+.import-label{width:100%; text-align:center; justify-content:center;}
+
+::-webkit-scrollbar{width:9px;}
+::-webkit-scrollbar-thumb{background:var(--contour); border-radius:5px;}
+
+@media (max-width: 820px){
+  .layout{flex-direction:column;}
+  aside{width:100%; min-width:0; max-height:42vh; border-right:none; border-bottom:1px solid var(--line);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Traceur</h1>
+    <span class="tagline">Prépare tes étapes</span>
+  </div>
+
+  <div class="mode-switch" role="tablist">
+    <button class="mode-btn active" id="modeSimpleBtn" data-mode="simple" role="tab" aria-selected="true">Mode simple</button>
+    <button class="mode-btn" id="modeAdvancedBtn" data-mode="advanced" role="tab" aria-selected="false">Mode avancé</button>
+  </div>
+
+  <div class="mode-controls" id="simpleModeControls">
+    <select id="baseGpxSelect" disabled>
+      <option value="">Chargement du dossier base-gpx…</option>
+    </select>
+    <button class="btn btn-primary" id="prepareStepsBtn" disabled>🚀 Préparer mes étapes</button>
+    <span class="base-gpx-hint" id="baseGpxHint" style="display:none"></span>
+  </div>
+
+  <div class="mode-controls" id="advancedModeControls" style="display:none">
+    <label class="btn btn-primary" for="fileInput">⤒ Charger un fichier GPX</label>
+    <input type="file" id="fileInput" accept=".gpx" />
+  </div>
+
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" id="reverseBtn" disabled>⇄ Inverser le sens</button>
+  <button class="btn btn-ghost" id="resetBtn" disabled>↺ Réinitialiser</button>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="card" id="statsCard">
+      <h2>Parcours</h2>
+      <div id="statsEmpty" class="empty-hint">Aucun fichier chargé. Importez un GPX pour afficher la longueur et le dénivelé.</div>
+      <div id="statsBody" style="display:none">
+        <div class="stat-row">
+          <div class="stat">
+            <div class="val" id="statLength">0.0<small> km</small></div>
+            <div class="lbl">Longueur</div>
+          </div>
+          <div class="stat plus">
+            <div class="val" id="statPlus">0<small> m</small></div>
+            <div class="lbl">D+ Dénivelé</div>
+          </div>
+          <div class="stat minus">
+            <div class="val" id="statMinus">0<small> m</small></div>
+            <div class="lbl">D− Dénivelé</div>
+          </div>
+        </div>
+        <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
+      </div>
+    </div>
+
+    <div class="card" id="saveCard">
+      <h2>Sauvegardes</h2>
+      <div class="actions">
+        <button class="btn btn-outline" id="saveStateBtn" disabled>💾 Sauvegarder l'état actuel</button>
+      </div>
+      <div id="saveListWrap" style="display:none">
+        <div id="saveList"></div>
+      </div>
+      <div class="help">Ces sauvegardes restent en mémoire le temps de la session. Exportez-les dans un fichier pour les conserver ou les reprendre plus tard.</div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn btn-outline" id="exportStateBtn" disabled>⇩ Exporter l'état (.te)</button>
+        <label class="btn btn-outline import-label" for="importStateInput">⇧ Importer un fichier .te</label>
+        <input type="file" id="importStateInput" accept=".te" style="display:none">
+      </div>
+    </div>
+
+    <div class="card" id="splitCard" style="display:none">
+      <h2>Découpage en jours</h2>
+      <div class="field-row">
+        <label for="segCount">Nombre de jours</label>
+        <input type="number" id="segCount" min="2" max="20" value="4">
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" id="splitBtn">✂ Découper le parcours</button>
+      </div>
+      <div id="segTableWrap" style="display:none">
+        <table class="segs">
+          <thead><tr><th>Jour</th><th>Longueur</th><th>D+</th><th>D−</th><th></th></tr></thead>
+          <tbody id="segTableBody"></tbody>
+        </table>
+        <div class="help">Faites glisser les repères numérotés sur la carte pour ajuster une frontière : les deux jours voisins se recalculent aussitôt. La corbeille supprime un jour ; le jour suivant s'agrandit pour prendre sa place (le précédent, si c'est le dernier jour).</div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div style="position:relative; flex:1; min-height:0; width:100%;">
+      <div id="map"></div>
+      <button class="map-toggle-btn" id="mapExpandBtn" title="Agrandir la carte">⤢</button>
+      <div class="map-empty" id="mapEmpty">
+        <div class="map-empty-inner">
+          <h3>Aucun tracé</h3>
+          <p>Chargez un fichier .gpx pour l'afficher sur le fond topographique, avec courbes de niveau, longueur et dénivelé.</p>
+        </div>
+      </div>
+    </div>
+    <div id="elevWrap">
+      <div class="elev-header">
+        <span class="elev-title">Profil d'altitude</span>
+        <span class="elev-hover-info" id="elevHoverInfo"></span>
+        <div class="elev-spacer"></div>
+        <button class="mini-btn" id="elevToggleBtn" title="Replier le profil">⌄</button>
+      </div>
+      <div id="elevBody">
+        <svg id="elevSvg" viewBox="0 0 1000 150" preserveAspectRatio="none"></svg>
+        <div class="elev-tooltip" id="elevTooltip"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   ÉTAT
+   ============================================================ */
+const SEG_COLORS = ['#2E4A38','#C9752E','#3C6E8F','#A5432E','#8A6D3B','#5E7A4A','#B08968','#4C6E56','#7A5C8E','#3E6B5C'];
+
+let rawPoints = [];   // points tels que chargés (ordre du fichier, jamais modifiés après reverse global)
+let points = [];      // copie de travail, peut être inversée
+let cum = [];         // distances cumulées (m) alignées sur `points`
+let startIdx = 0;
+let endIdx = 0;
+let boundaries = [];  // ex: [startIdx, b1, b2, ..., endIdx]
+
+let map, osmLayer, topoLayer;
+let bgPolyline = null;
+let segPolylines = [];
+let startMarker = null, endMarker = null;
+let boundMarkers = [];
+
+/* ============================================================
+   CARTE
+   ============================================================ */
+function initMap(){
+  map = L.map('map', {zoomControl:true}).setView([45.75, 4.85], 6);
+
+  osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  });
+
+  topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    subdomains: ['a','b','c'],
+    attribution: 'Données © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
+  });
+
+  // Fond par défaut : carte topo avec courbes de niveau.
+  topoLayer.addTo(map);
+
+  // Si la carte topo échoue à charger (tuiles indisponibles), on revient
+  // silencieusement sur le plan OpenStreetMap standard.
+  let topoErrors = 0;
+  topoLayer.on('tileerror', () => {
+    topoErrors++;
+    if(topoErrors > 8 && map.hasLayer(topoLayer)){
+      map.removeLayer(topoLayer);
+      if(!map.hasLayer(osmLayer)) osmLayer.addTo(map);
+    }
+  });
+}
+initMap();
+window.addEventListener('resize', () => {
+  map.invalidateSize();
+  updateElevationProfile();
+});
+setTimeout(() => map.invalidateSize(), 200);
+
+/* ============================================================
+   UTILITAIRES GÉO
+   ============================================================ */
+function haversine(lat1, lon1, lat2, lon2){
+  const R = 6371000, toRad = d => d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function computeCum(pts){
+  const c = [0];
+  for(let i=1;i<pts.length;i++) c.push(c[i-1] + haversine(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon));
+  return c;
+}
+function distBetween(a,b){ return cum[b] - cum[a]; }
+
+/* Le signal d'altitude brut d'un GPX (GPS ou baro) est bruité : de petites
+   oscillations de ±1 à 5 m entre points consécutifs, sommées telles quelles,
+   gonflent artificiellement le dénivelé cumulé (souvent x1.5 à x3 par rapport
+   à un outil qui lisse le profil avant de calculer). On lisse donc l'altitude
+   par une moyenne glissante définie en distance (pas en nombre de points, pour
+   rester cohérent quelle que soit la densité d'enregistrement du traceur),
+   puis on calcule le dénivelé sur ce profil lissé — comme le font la plupart
+   des outils de randonnée. */
+let elevSmooth = [];
+let smoothWindow = 350; // mètres — fenêtre de lissage fixe utilisée pour le calcul du dénivelé
+
+function computeSmoothedElevations(pts, cumArr, windowMeters){
+  const n = pts.length;
+  const out = new Array(n);
+  if(windowMeters <= 0){
+    for(let i=0;i<n;i++) out[i] = pts[i].ele;
+    return out;
+  }
+  const half = windowMeters / 2;
+  let lo = 0, hi = 0, sum = 0;
+  for(let i=0;i<n;i++){
+    if(i===0){
+      while(hi < n-1 && cumArr[hi+1] - cumArr[0] <= half) hi++;
+      for(let k=0;k<=hi;k++) sum += pts[k].ele;
+    } else {
+      while(hi < n-1 && cumArr[hi+1] - cumArr[i] <= half){ hi++; sum += pts[hi].ele; }
+    }
+    while(cumArr[i] - cumArr[lo] > half){ sum -= pts[lo].ele; lo++; }
+    out[i] = sum / (hi - lo + 1);
+  }
+  return out;
+}
+
+function recomputeElevSmooth(){
+  elevSmooth = computeSmoothedElevations(points, cum, smoothWindow);
+}
+
+function elevGainLoss(a,b){
+  let gain=0, loss=0;
+  for(let i=a+1;i<=b;i++){
+    const d = elevSmooth[i] - elevSmooth[i-1];
+    if(d>0) gain+=d; else loss += -d;
+  }
+  return {gain, loss};
+}
+function nearestIndex(lat, lon, lo, hi){
+  let best=lo, bd=Infinity;
+  for(let i=lo;i<=hi;i++){
+    const d = haversine(lat,lon, points[i].lat, points[i].lon);
+    if(d<bd){bd=d; best=i;}
+  }
+  return best;
+}
+
+/* ============================================================
+   GPX
+   ============================================================ */
+function parseGPX(text){
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  if(xml.querySelector('parsererror')) throw new Error('Fichier GPX invalide.');
+  let nodes = Array.from(xml.getElementsByTagName('trkpt'));
+  if(nodes.length === 0) nodes = Array.from(xml.getElementsByTagName('rtept'));
+  if(nodes.length === 0) throw new Error('Aucun point de tracé (trkpt/rtept) trouvé dans ce fichier.');
+  return nodes.map(n => {
+    const eleNode = n.getElementsByTagName('ele')[0];
+    return {
+      lat: parseFloat(n.getAttribute('lat')),
+      lon: parseFloat(n.getAttribute('lon')),
+      ele: eleNode ? parseFloat(eleNode.textContent) : 0
+    };
+  }).filter(p => !isNaN(p.lat) && !isNaN(p.lon));
+}
+
+function handleGpxText(text){
+  try{
+    const pts = parseGPX(text);
+    if(pts.length < 2) throw new Error('Le tracé doit contenir au moins 2 points.');
+    loadTrack(pts);
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }
+}
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => handleGpxText(evt.target.result);
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ============================================================
+   MODE SIMPLE / MODE AVANCÉ
+   ============================================================ */
+function setMode(mode){
+  const simple = mode === 'simple';
+  document.getElementById('modeSimpleBtn').classList.toggle('active', simple);
+  document.getElementById('modeSimpleBtn').setAttribute('aria-selected', simple);
+  document.getElementById('modeAdvancedBtn').classList.toggle('active', !simple);
+  document.getElementById('modeAdvancedBtn').setAttribute('aria-selected', !simple);
+  document.getElementById('simpleModeControls').style.display = simple ? 'flex' : 'none';
+  document.getElementById('advancedModeControls').style.display = simple ? 'none' : 'flex';
+}
+document.getElementById('modeSimpleBtn').addEventListener('click', () => setMode('simple'));
+document.getElementById('modeAdvancedBtn').addEventListener('click', () => setMode('advanced'));
+setMode('simple'); // mode par défaut
+
+/* Le dossier "base-gpx" est listé automatiquement au démarrage. Une page web
+   ne peut pas parcourir le disque toute seule : on va donc chercher, via
+   fetch(), soit un petit manifeste base-gpx/manifest.json (["etape1.gpx", ...]),
+   soit — à défaut — la page de listing que génèrent la plupart des serveurs
+   web statiques pour un dossier (ex. `python -m http.server`). Cela ne
+   fonctionne que si la page est servie via http(s) (pas en double-cliquant
+   sur le fichier), ce qui est indiqué à l'utilisateur si rien n'est trouvé. */
+let baseGpxNames = [];
+
+async function fetchManifestNames(){
+  try{
+    const res = await fetch('base-gpx/manifest.json', {cache:'no-store'});
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(Array.isArray(data)) return data.filter(n => /\.gpx$/i.test(n));
+    return null;
+  }catch(e){ return null; }
+}
+
+async function fetchDirectoryListingNames(){
+  try{
+    const res = await fetch('base-gpx/', {cache:'no-store'});
+    if(!res.ok) return null;
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const names = Array.from(doc.querySelectorAll('a[href]'))
+      .map(a => decodeURIComponent(a.getAttribute('href')))
+      .filter(href => /\.gpx$/i.test(href))
+      .map(href => href.split('/').pop());
+    return names.length ? names : null;
+  }catch(e){ return null; }
+}
+
+async function loadBaseGpxList(){
+  const sel = document.getElementById('baseGpxSelect');
+  const prepareBtn = document.getElementById('prepareStepsBtn');
+  const hint = document.getElementById('baseGpxHint');
+
+  let names = await fetchManifestNames();
+  if(!names) names = await fetchDirectoryListingNames();
+
+  if(!names || names.length === 0){
+    sel.innerHTML = '<option value="">Aucun fichier trouvé dans base-gpx/</option>';
+    sel.disabled = true;
+    prepareBtn.disabled = true;
+    hint.style.display = 'inline';
+    hint.innerHTML = "Rien trouvé automatiquement : servez la page via un serveur local (ex. <code>python -m http.server</code> depuis le dossier contenant <code>base-gpx/</code>), ou ajoutez <code>base-gpx/manifest.json</code> listant vos fichiers.";
+    return;
+  }
+
+  names = [...new Set(names)].sort((a,b) => a.localeCompare(b, 'fr'));
+  baseGpxNames = names;
+  hint.style.display = 'none';
+  sel.innerHTML = '';
+  names.forEach((n, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = n.replace(/\.gpx$/i, '');
+    sel.appendChild(opt);
+  });
+  sel.disabled = false;
+  prepareBtn.disabled = false;
+}
+loadBaseGpxList();
+
+document.getElementById('prepareStepsBtn').addEventListener('click', async () => {
+  const idx = parseInt(document.getElementById('baseGpxSelect').value, 10);
+  const name = baseGpxNames[idx];
+  if(!name) return;
+  try{
+    const res = await fetch('base-gpx/' + encodeURIComponent(name), {cache:'no-store'});
+    if(!res.ok) throw new Error(`Impossible de charger "base-gpx/${name}".`);
+    const text = await res.text();
+    handleGpxText(text);
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }
+});
+
+function enableUIAfterLoad(){
+  document.getElementById('reverseBtn').disabled = false;
+  document.getElementById('resetBtn').disabled = false;
+  document.getElementById('splitCard').style.display = 'block';
+  document.getElementById('statsEmpty').style.display = 'none';
+  document.getElementById('statsBody').style.display = 'block';
+  document.getElementById('mapEmpty').style.display = 'none';
+  document.getElementById('segCount').max = Math.max(2, Math.min(20, Math.floor(points.length/2)));
+  document.getElementById('saveStateBtn').disabled = false;
+  document.getElementById('exportStateBtn').disabled = false;
+}
+
+/* Applique un état complet (import GPX initial, reprise d'une sauvegarde
+   mémoire, ou import d'un fichier .te) : recalcule tout et met à jour l'UI. */
+function applyState(state){
+  rawPoints = state.rawPoints.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
+  points = state.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
+  cum = computeCum(points);
+  recomputeElevSmooth();
+  startIdx = state.startIdx;
+  endIdx = state.endIdx;
+  boundaries = state.boundaries.slice();
+  enableUIAfterLoad();
+  fitToTrack();
+  renderAll();
+}
+
+function loadTrack(pts){
+  applyState({
+    rawPoints: pts,
+    points: pts.slice(),
+    startIdx: 0,
+    endIdx: pts.length - 1,
+    boundaries: [0, pts.length - 1]
+  });
+}
+
+function fitToTrack(){
+  map.invalidateSize();
+  const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+  map.fitBounds(bounds, {padding:[30,30]});
+}
+
+/* ============================================================
+   ACTIONS GLOBALES
+   ============================================================ */
+document.getElementById('reverseBtn').addEventListener('click', () => {
+  if(points.length === 0) return;
+  const n = points.length;
+  points = points.slice().reverse();
+  cum = computeCum(points);
+  recomputeElevSmooth();
+  const newStart = n - 1 - endIdx;
+  const newEnd   = n - 1 - startIdx;
+  boundaries = boundaries.map(b => n - 1 - b).sort((a,b)=>a-b);
+  startIdx = newStart; endIdx = newEnd;
+  renderAll();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if(rawPoints.length === 0) return;
+  points = rawPoints.slice();
+  cum = computeCum(points);
+  recomputeElevSmooth();
+  startIdx = 0; endIdx = points.length - 1;
+  boundaries = [startIdx, endIdx];
+  document.getElementById('segTableWrap').style.display = 'none';
+  fitToTrack();
+  renderAll();
+});
+
+/* ============================================================
+   SAUVEGARDES (mémoire de session) + EXPORT / IMPORT FICHIER .te
+   ============================================================ */
+let savedStates = [];
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function getCurrentStateObject(label){
+  return {
+    format: 'traceur-etat',
+    version: 1,
+    label: label || null,
+    savedAt: new Date().toISOString(),
+    rawPoints: rawPoints,
+    points: points,
+    startIdx: startIdx,
+    endIdx: endIdx,
+    boundaries: boundaries
+  };
+}
+
+document.getElementById('saveStateBtn').addEventListener('click', () => {
+  if(points.length === 0) return;
+  const suggested = 'Sauvegarde ' + (savedStates.length + 1);
+  const label = prompt('Nom de cette sauvegarde :', suggested);
+  if(label === null) return; // annulé
+  const state = getCurrentStateObject(label.trim() || suggested);
+  savedStates.push({
+    id: Date.now() + '-' + Math.random().toString(36).slice(2),
+    label: state.label,
+    savedAt: state.savedAt,
+    rawPoints: rawPoints.slice(),
+    points: points.slice(),
+    startIdx, endIdx,
+    boundaries: boundaries.slice()
+  });
+  renderSaveList();
+});
+
+function renderSaveList(){
+  const wrap = document.getElementById('saveListWrap');
+  const list = document.getElementById('saveList');
+  if(savedStates.length === 0){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = '';
+  savedStates.forEach(s => {
+    const time = new Date(s.savedAt).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+    const row = document.createElement('div');
+    row.className = 'save-row';
+    row.innerHTML = `
+      <div class="save-info">
+        <div class="save-label">${escapeHtml(s.label)}</div>
+        <div class="save-time">${time}</div>
+      </div>
+      <div class="row-actions">
+        <button class="mini-btn restore-btn" title="Reprendre cette sauvegarde" aria-label="Reprendre cette sauvegarde">↺</button>
+        <button class="del-btn" title="Supprimer cette sauvegarde" aria-label="Supprimer cette sauvegarde">${DEL_ICON}</button>
+      </div>`;
+    row.querySelector('.restore-btn').addEventListener('click', () => restoreSavedState(s.id));
+    row.querySelector('.del-btn').addEventListener('click', () => deleteSavedState(s.id));
+    list.appendChild(row);
+  });
+}
+
+function restoreSavedState(id){
+  const s = savedStates.find(x => x.id === id);
+  if(!s) return;
+  applyState({
+    rawPoints: s.rawPoints,
+    points: s.points,
+    startIdx: s.startIdx,
+    endIdx: s.endIdx,
+    boundaries: s.boundaries
+  });
+  document.getElementById('segTableWrap').style.display = boundaries.length > 2 ? 'block' : 'none';
+}
+
+function deleteSavedState(id){
+  savedStates = savedStates.filter(x => x.id !== id);
+  renderSaveList();
+}
+
+document.getElementById('exportStateBtn').addEventListener('click', () => {
+  if(points.length === 0) return;
+  const state = getCurrentStateObject(null);
+  const jsonStr = JSON.stringify(state);
+  const blob = new Blob([jsonStr], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0,16).replace('T','-').replace(':','h');
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `traceur-${stamp}.te`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+document.getElementById('importStateInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try{
+      const state = JSON.parse(evt.target.result);
+      if(state.format !== 'traceur-etat' || !Array.isArray(state.rawPoints) || !Array.isArray(state.points)
+         || !Array.isArray(state.boundaries) || typeof state.startIdx !== 'number' || typeof state.endIdx !== 'number'){
+        throw new Error("Ce fichier .te n'est pas reconnu ou est corrompu.");
+      }
+      applyState(state);
+      document.getElementById('segTableWrap').style.display = boundaries.length > 2 ? 'block' : 'none';
+    }catch(err){
+      alert('Erreur : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('splitBtn').addEventListener('click', () => {
+  const n = parseInt(document.getElementById('segCount').value, 10);
+  if(!n || n < 2){ alert('Choisissez un nombre de jours ≥ 2.'); return; }
+  if(n > (endIdx - startIdx)){ alert('Trop de jours pour le nombre de points disponibles.'); return; }
+  splitEqual(n);
+  renderAll();
+  document.getElementById('segTableWrap').style.display = 'block';
+});
+
+function deleteSegment(i){
+  const nSeg = boundaries.length - 1;
+  if(nSeg <= 1) return;
+  if(i < nSeg - 1){
+    // il existe un jour suivant : il absorbe la place du jour supprimé
+    boundaries.splice(i + 1, 1);
+  } else {
+    // dernier jour supprimé : le jour précédent absorbe sa place
+    boundaries.splice(i, 1);
+  }
+  renderAll();
+}
+
+function splitEqual(n){
+  const total = distBetween(startIdx, endIdx);
+  const target = total / n;
+  const bs = [startIdx];
+  let cursor = startIdx;
+  for(let k=1;k<n;k++){
+    const targetDist = cum[startIdx] + k*target;
+    let idx = cursor;
+    while(idx < endIdx && cum[idx] < targetDist) idx++;
+    // choisir le point le plus proche de la cible entre idx-1 et idx
+    if(idx>0 && Math.abs(cum[idx-1]-targetDist) < Math.abs(cum[idx]-targetDist)) idx = idx-1;
+    idx = Math.max(idx, cursor+1);
+    idx = Math.min(idx, endIdx-1);
+    bs.push(idx);
+    cursor = idx;
+  }
+  bs.push(endIdx);
+  // dédoublonner / garder croissant strict
+  boundaries = [...new Set(bs)].sort((a,b)=>a-b);
+}
+
+/* Le déplacement du départ ou de l'arrivée ne doit raccourcir/allonger que le
+   premier (ou dernier) jour : les frontières internes des autres jours restent
+   fixes en indice, on borne juste le déplacement pour ne pas les traverser. */
+/* ============================================================
+   RENDU CARTE
+   ============================================================ */
+function pinIcon(cls, label, size){
+  return L.divIcon({
+    className: '',
+    html: `<div class="trk-pin ${cls}" style="width:${size}px;height:${size}px;"><span>${label}</span></div>`,
+    iconSize: [size,size],
+    iconAnchor: [size/2, size]
+  });
+}
+
+function clearLayers(){
+  if(bgPolyline){ map.removeLayer(bgPolyline); bgPolyline=null; }
+  segPolylines.forEach(p => map.removeLayer(p)); segPolylines = [];
+  if(startMarker){ map.removeLayer(startMarker); startMarker=null; }
+  if(endMarker){ map.removeLayer(endMarker); endMarker=null; }
+  boundMarkers.forEach(m => map.removeLayer(m)); boundMarkers = [];
+}
+
+function renderAll(){
+  clearLayers();
+  if(points.length === 0) return;
+
+  // tracé complet en fond, discret
+  bgPolyline = L.polyline(points.map(p=>[p.lat,p.lon]), {
+    color: '#E63946', weight: 3.5, opacity: .6, dashArray: '2 7'
+  }).addTo(map);
+
+  // segments actifs colorés
+  for(let i=0;i<boundaries.length-1;i++){
+    const a = boundaries[i], b = boundaries[i+1];
+    const seg = points.slice(a, b+1).map(p=>[p.lat,p.lon]);
+    const color = boundaries.length>2 ? SEG_COLORS[i % SEG_COLORS.length] : '#2E4A38';
+    const pl = L.polyline(seg, {color, weight:5, opacity:.92, lineCap:'round'}).addTo(map);
+    segPolylines.push(pl);
+  }
+
+  // repère départ
+  startMarker = L.marker([points[startIdx].lat, points[startIdx].lon], {
+    draggable:true, icon: pinIcon('start','D',30), zIndexOffset: 1000
+  }).addTo(map).bindTooltip('Départ — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+  startMarker.on('dragend', e => {
+    const {lat,lng} = e.target.getLatLng();
+    // le départ ne peut pas dépasser la première frontière interne (le jour 1
+    // seul est raccourci/allongé, les jours suivants restent inchangés)
+    const hi = boundaries.length > 2 ? Math.min(endIdx-1, boundaries[1]-1) : endIdx-1;
+    startIdx = nearestIndex(lat, lng, 0, Math.max(0, hi));
+    boundaries[0] = startIdx;
+    renderAll();
+  });
+
+  // repère arrivée
+  endMarker = L.marker([points[endIdx].lat, points[endIdx].lon], {
+    draggable:true, icon: pinIcon('end','A',30), zIndexOffset: 1000
+  }).addTo(map).bindTooltip('Arrivée — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+  endMarker.on('dragend', e => {
+    const {lat,lng} = e.target.getLatLng();
+    // l'arrivée ne peut pas dépasser la dernière frontière interne (seul le
+    // dernier jour est raccourci/allongé, les précédents restent inchangés)
+    const lo = boundaries.length > 2 ? Math.max(startIdx+1, boundaries[boundaries.length-2]+1) : startIdx+1;
+    endIdx = nearestIndex(lat, lng, Math.min(lo, points.length-1), points.length-1);
+    boundaries[boundaries.length-1] = endIdx;
+    renderAll();
+  });
+
+  // repères de tronçons internes
+  if(boundaries.length > 2){
+    for(let i=1;i<boundaries.length-1;i++){
+      const idx = boundaries[i];
+      const m = L.marker([points[idx].lat, points[idx].lon], {
+        draggable:true, icon: pinIcon('bound', String(i), 22), zIndexOffset: 900
+      }).addTo(map).bindTooltip('Frontière Jour ' + i + ' / Jour ' + (i+1), {direction:'top', offset:[0,-22]});
+      m.on('dragend', (function(bi){
+        return function(e){
+          const {lat,lng} = e.target.getLatLng();
+          const lo = boundaries[bi-1] + 1;
+          const hi = boundaries[bi+1] - 1;
+          if(hi < lo) return renderAll();
+          const idx2 = nearestIndex(lat, lng, lo, hi);
+          boundaries[bi] = idx2;
+          renderAll();
+        };
+      })(i));
+      boundMarkers.push(m);
+    }
+  }
+
+  updateStats();
+  updateSegTable();
+  updateElevationProfile();
+}
+
+/* ============================================================
+   CARTOUCHES / TABLEAU
+   ============================================================ */
+function fmtKm(m){ return (m/1000).toFixed(2); }
+function fmtM(m){ return Math.round(m).toString(); }
+
+function updateStats(){
+  const total = distBetween(startIdx, endIdx);
+  const {gain, loss} = elevGainLoss(startIdx, endIdx);
+  document.getElementById('statLength').innerHTML = fmtKm(total) + '<small> km</small>';
+  document.getElementById('statPlus').innerHTML = '+' + fmtM(gain) + '<small> m</small>';
+  document.getElementById('statMinus').innerHTML = '−' + fmtM(loss) + '<small> m</small>';
+}
+
+function updateSegTable(){
+  const wrap = document.getElementById('segTableWrap');
+  const body = document.getElementById('segTableBody');
+  if(boundaries.length <= 2){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  body.innerHTML = '';
+  for(let i=0;i<boundaries.length-1;i++){
+    const a = boundaries[i], b = boundaries[i+1];
+    const len = distBetween(a,b);
+    const {gain, loss} = elevGainLoss(a,b);
+    const color = SEG_COLORS[i % SEG_COLORS.length];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><span class="seg-dot" style="background:${color}"></span><span class="seg-num">Jour ${i+1}</span></td>
+      <td>${fmtKm(len)} km</td>
+      <td style="color:#2E4A38">+${fmtM(gain)} m</td>
+      <td style="color:#A5432E">−${fmtM(loss)} m</td>
+      <td><div class="row-actions">
+        <button class="dl-btn" title="Télécharger le Jour ${i+1} en GPX" aria-label="Télécharger le Jour ${i+1}">${DL_ICON}</button>
+        <button class="del-btn" title="Supprimer le Jour ${i+1}" aria-label="Supprimer le Jour ${i+1}">${DEL_ICON}</button>
+      </div></td>`;
+    tr.querySelector('.dl-btn').addEventListener('click', () => downloadSegmentGPX(i));
+    tr.querySelector('.del-btn').addEventListener('click', () => deleteSegment(i));
+    body.appendChild(tr);
+  }
+}
+
+const DL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6.5 10.5 12 16l5.5-5.5"/><path d="M4 19.5h16"/></svg>';
+const DEL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4.6c0-.3.3-.6.6-.6h4.8c.3 0 .6.3.6.6V7"/><path d="M6 7l1 12.4c0 .9.7 1.6 1.6 1.6h6.8c.9 0 1.6-.7 1.6-1.6L18 7"/></svg>';
+
+function pointsToGPX(pts, name){
+  const trkpts = pts.map(p =>
+    `      <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><ele>${(p.ele||0).toFixed(1)}</ele></trkpt>`
+  ).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Traceur" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${name}</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>
+`;
+}
+
+function downloadSegmentGPX(i){
+  const a = boundaries[i], b = boundaries[i+1];
+  const subset = points.slice(a, b+1);
+  const name = 'Jour ' + (i+1);
+  const gpxStr = pointsToGPX(subset, name);
+  const blob = new Blob([gpxStr], {type:'application/gpx+xml'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `jour-${i+1}.gpx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ============================================================
+   PROFIL D'ALTITUDE (SVG)
+   ============================================================ */
+function niceStep(rough){
+  if(rough <= 0) return 1;
+  const pow10 = Math.pow(10, Math.floor(Math.log10(rough)));
+  const n = rough / pow10;
+  let step;
+  if(n < 1.5) step = 1;
+  else if(n < 3) step = 2;
+  else if(n < 7) step = 5;
+  else step = 10;
+  return step * pow10;
+}
+
+function updateElevationProfile(){
+  const svg = document.getElementById('elevSvg');
+  svg.innerHTML = '';
+  if(points.length === 0 || endIdx <= startIdx) return;
+
+  // dimensions réelles en pixels : le viewBox est calé 1:1 sur la taille
+  // affichée pour que le texte des graduations ne soit jamais déformé.
+  const rect = svg.getBoundingClientRect();
+  const W = Math.max(320, Math.round(rect.width));
+  const H = Math.max(90, Math.round(rect.height));
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.removeAttribute('preserveAspectRatio');
+
+  const padLeft = 46, padRight = 14, padTop = 12, padBottom = 26;
+  const plotW = W - padLeft - padRight;
+  const plotH = H - padTop - padBottom;
+
+  let minEleRaw = Infinity, maxEleRaw = -Infinity;
+  for(let i=startIdx;i<=endIdx;i++){
+    if(elevSmooth[i] < minEleRaw) minEleRaw = elevSmooth[i];
+    if(elevSmooth[i] > maxEleRaw) maxEleRaw = elevSmooth[i];
+    if(points[i].ele < minEleRaw) minEleRaw = points[i].ele;
+    if(points[i].ele > maxEleRaw) maxEleRaw = points[i].ele;
+  }
+  if(minEleRaw === maxEleRaw){ minEleRaw -= 10; maxEleRaw += 10; }
+
+  // graduation altitude : on choisit un pas "rond" puis on englobe la plage
+  const eleStep = niceStep((maxEleRaw - minEleRaw) / 4);
+  const minEle = Math.floor(minEleRaw / eleStep) * eleStep;
+  const maxEle = Math.ceil(maxEleRaw / eleStep) * eleStep;
+
+  const span = cum[endIdx] - cum[startIdx] || 1;
+  const totalKm = span / 1000;
+  const distStep = niceStep(totalKm / 5) || 0.5;
+
+  function X(i){ return padLeft + ((cum[i]-cum[startIdx]) / span) * plotW; }
+  function Y(ele){ return padTop + (1 - (ele-minEle)/(maxEle-minEle)) * plotH; }
+
+  const ns = 'http://www.w3.org/2000/svg';
+  function addText(x, y, str, anchor){
+    const t = document.createElementNS(ns,'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', anchor || 'middle');
+    t.setAttribute('font-family', "'IBM Plex Mono', monospace");
+    t.setAttribute('font-size', '10');
+    t.setAttribute('fill', '#4B5A50');
+    t.textContent = str;
+    svg.appendChild(t);
+    return t;
+  }
+
+  // --- graduation verticale (altitude) : lignes horizontales + labels ---
+  for(let e = minEle; e <= maxEle + 0.001; e += eleStep){
+    const y = Y(e);
+    const gl = document.createElementNS(ns,'line');
+    gl.setAttribute('x1', padLeft); gl.setAttribute('x2', W - padRight);
+    gl.setAttribute('y1', y.toFixed(1)); gl.setAttribute('y2', y.toFixed(1));
+    gl.setAttribute('stroke', '#E6DEC7'); gl.setAttribute('stroke-width', '1');
+    svg.appendChild(gl);
+    addText(padLeft - 8, y + 3, Math.round(e) + ' m', 'end');
+  }
+
+  // --- graduation horizontale (distance) : lignes verticales + labels ---
+  for(let d = 0; d <= totalKm + 0.0001; d += distStep){
+    const x = padLeft + (d*1000/span) * plotW;
+    const gl = document.createElementNS(ns,'line');
+    gl.setAttribute('x1', x.toFixed(1)); gl.setAttribute('x2', x.toFixed(1));
+    gl.setAttribute('y1', padTop); gl.setAttribute('y2', H - padBottom);
+    gl.setAttribute('stroke', '#EDE7D4'); gl.setAttribute('stroke-width', '1');
+    svg.appendChild(gl);
+    addText(x, H - padBottom + 15, d.toFixed(distStep < 1 ? 1 : 0) + ' km', 'middle');
+  }
+
+  // --- axes ---
+  const axisY = document.createElementNS(ns,'line');
+  axisY.setAttribute('x1', padLeft); axisY.setAttribute('x2', padLeft);
+  axisY.setAttribute('y1', padTop); axisY.setAttribute('y2', H - padBottom);
+  axisY.setAttribute('stroke', '#B6A984'); axisY.setAttribute('stroke-width', '1.3');
+  svg.appendChild(axisY);
+
+  const axisX = document.createElementNS(ns,'line');
+  axisX.setAttribute('x1', padLeft); axisX.setAttribute('x2', W - padRight);
+  axisX.setAttribute('y1', H - padBottom); axisX.setAttribute('y2', H - padBottom);
+  axisX.setAttribute('stroke', '#B6A984'); axisX.setAttribute('stroke-width', '1.3');
+  svg.appendChild(axisX);
+
+  // --- altitude brute en fond, pour comparaison visuelle avec le lissage ---
+  {
+    let dRaw = '';
+    for(let i=startIdx;i<=endIdx;i++){
+      dRaw += (i===startIdx? 'M':'L') + X(i).toFixed(1) + ',' + Y(points[i].ele).toFixed(1) + ' ';
+    }
+    const rawLine = document.createElementNS(ns,'path');
+    rawLine.setAttribute('d', dRaw);
+    rawLine.setAttribute('fill','none');
+    rawLine.setAttribute('stroke', '#9A9178');
+    rawLine.setAttribute('stroke-width','1');
+    rawLine.setAttribute('opacity','0.55');
+    svg.appendChild(rawLine);
+  }
+
+  // --- courbe(s) d'altitude lissée par tronçon (= base du calcul de dénivelé) ---
+  for(let s=0;s<boundaries.length-1;s++){
+    const a = boundaries[s], b = boundaries[s+1];
+    const color = boundaries.length>2 ? SEG_COLORS[s % SEG_COLORS.length] : '#2E4A38';
+    let d = '';
+    for(let i=a;i<=b;i++){
+      d += (i===a? 'M':'L') + X(i).toFixed(1) + ',' + Y(elevSmooth[i]).toFixed(1) + ' ';
+    }
+    const area = document.createElementNS(ns,'path');
+    area.setAttribute('d', d + `L${X(b).toFixed(1)},${H-padBottom} L${X(a).toFixed(1)},${H-padBottom} Z`);
+    area.setAttribute('fill', color); area.setAttribute('opacity','0.16');
+    svg.appendChild(area);
+
+    const line = document.createElementNS(ns,'path');
+    line.setAttribute('d', d);
+    line.setAttribute('fill','none');
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width','2.4');
+    line.setAttribute('stroke-linejoin','round');
+    svg.appendChild(line);
+  }
+
+  // --- repères verticaux des frontières internes de tronçons ---
+  for(let i=1;i<boundaries.length-1;i++){
+    const x = X(boundaries[i]);
+    const vl = document.createElementNS(ns,'line');
+    vl.setAttribute('x1', x); vl.setAttribute('x2', x);
+    vl.setAttribute('y1', padTop); vl.setAttribute('y2', H-padBottom);
+    vl.setAttribute('stroke', '#8A8067'); vl.setAttribute('stroke-width','1.2');
+    vl.setAttribute('stroke-dasharray','3 3');
+    svg.appendChild(vl);
+  }
+
+  // --- repère de survol (ligne + point), synchronisé avec la carte ---
+  hoverLineEl = document.createElementNS(ns,'line');
+  hoverLineEl.setAttribute('y1', padTop); hoverLineEl.setAttribute('y2', H - padBottom);
+  hoverLineEl.setAttribute('stroke', '#1E2822'); hoverLineEl.setAttribute('stroke-width','1');
+  hoverLineEl.setAttribute('opacity','0');
+  svg.appendChild(hoverLineEl);
+
+  hoverDotEl = document.createElementNS(ns,'circle');
+  hoverDotEl.setAttribute('r','4.5');
+  hoverDotEl.setAttribute('fill', '#C9752E');
+  hoverDotEl.setAttribute('stroke', '#fff');
+  hoverDotEl.setAttribute('stroke-width','1.6');
+  hoverDotEl.setAttribute('opacity','0');
+  svg.appendChild(hoverDotEl);
+
+  // échelles exposées pour la synchronisation carte / frise au survol
+  profileScale = {padLeft, plotW, W, H, padTop, padBottom, X, Y};
+}
+
+/* ============================================================
+   SURVOL DE LA FRISE → REPÈRE SUR LA CARTE
+   ============================================================ */
+let profileScale = null;
+let hoverLineEl = null, hoverDotEl = null;
+let hoverMapMarker = null;
+
+function indexAtDistance(targetDist){
+  let lo = startIdx, hi = endIdx;
+  while(lo < hi){
+    const mid = (lo + hi) >> 1;
+    if(cum[mid] < targetDist) lo = mid + 1; else hi = mid;
+  }
+  if(lo > startIdx && Math.abs(cum[lo-1]-targetDist) < Math.abs(cum[lo]-targetDist)) return lo - 1;
+  return lo;
+}
+
+function showHoverAt(idx){
+  const p = points[idx];
+  if(!hoverMapMarker){
+    hoverMapMarker = L.circleMarker([p.lat, p.lon], {
+      radius: 8, color: '#fff', weight: 2, fillColor: '#C9752E', fillOpacity: 1
+    });
+  } else {
+    hoverMapMarker.setLatLng([p.lat, p.lon]);
+  }
+  if(!map.hasLayer(hoverMapMarker)) hoverMapMarker.addTo(map);
+
+  if(hoverLineEl && hoverDotEl && profileScale){
+    const x = profileScale.X(idx);
+    const y = profileScale.Y(p.ele); // altitude exacte (non lissée) du point survolé
+    hoverLineEl.setAttribute('x1', x); hoverLineEl.setAttribute('x2', x);
+    hoverLineEl.setAttribute('opacity', '1');
+    hoverDotEl.setAttribute('cx', x); hoverDotEl.setAttribute('cy', y);
+    hoverDotEl.setAttribute('opacity', '1');
+  }
+
+  document.getElementById('elevHoverInfo').textContent =
+    Math.round(p.ele) + ' m · ' + fmtKm(cum[idx] - cum[startIdx]) + ' km';
+}
+
+function hideHover(){
+  if(hoverMapMarker && map.hasLayer(hoverMapMarker)) map.removeLayer(hoverMapMarker);
+  if(hoverLineEl) hoverLineEl.setAttribute('opacity','0');
+  if(hoverDotEl) hoverDotEl.setAttribute('opacity','0');
+  document.getElementById('elevHoverInfo').textContent = '';
+  const tip = document.getElementById('elevTooltip');
+  tip.style.opacity = '0';
+}
+
+function updateElevTooltip(clientX, clientY, ele){
+  const wrap = document.getElementById('elevWrap');
+  const rect = wrap.getBoundingClientRect();
+  const tip = document.getElementById('elevTooltip');
+  let left = clientX - rect.left + 14;
+  let top = clientY - rect.top - 30;
+  left = Math.min(Math.max(left, 4), rect.width - 66);
+  top = Math.max(top, 4);
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+  tip.textContent = Math.round(ele) + ' m';
+  tip.style.opacity = '1';
+}
+
+function onProfilePointerMove(clientX, clientY){
+  if(!profileScale || points.length === 0 || endIdx <= startIdx) return;
+  const svg = document.getElementById('elevSvg');
+  const rect = svg.getBoundingClientRect();
+  let t = (clientX - rect.left - profileScale.padLeft) / profileScale.plotW;
+  t = Math.max(0, Math.min(1, t));
+  const targetDist = cum[startIdx] + t * (cum[endIdx] - cum[startIdx]);
+  const idx = indexAtDistance(targetDist);
+  showHoverAt(idx);
+  updateElevTooltip(clientX, clientY, points[idx].ele);
+}
+
+const elevSvgEl = document.getElementById('elevSvg');
+elevSvgEl.addEventListener('mousemove', e => onProfilePointerMove(e.clientX, e.clientY));
+elevSvgEl.addEventListener('mouseleave', hideHover);
+elevSvgEl.addEventListener('touchmove', e => {
+  if(e.touches[0]) onProfilePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:true});
+elevSvgEl.addEventListener('touchend', hideHover);
+
+/* ============================================================
+   FRISE REPLIABLE / CARTE AGRANDISSABLE
+   ============================================================ */
+document.getElementById('elevToggleBtn').addEventListener('click', () => {
+  const wrap = document.getElementById('elevWrap');
+  const btn = document.getElementById('elevToggleBtn');
+  const collapsed = wrap.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '︿' : '⌄';
+  btn.title = collapsed ? 'Déplier le profil' : 'Replier le profil';
+  setTimeout(() => {
+    map.invalidateSize();
+    if(!collapsed) updateElevationProfile();
+  }, 190);
+});
+
+document.getElementById('mapExpandBtn').addEventListener('click', () => {
+  const layoutEl = document.querySelector('.layout');
+  const btn = document.getElementById('mapExpandBtn');
+  const expanded = layoutEl.classList.toggle('map-expanded');
+  btn.innerHTML = expanded ? '⤡' : '⤢';
+  btn.title = expanded ? 'Réduire la carte' : 'Agrandir la carte';
+  setTimeout(() => {
+    map.invalidateSize();
+    if(!document.getElementById('elevWrap').classList.contains('collapsed')) updateElevationProfile();
+  }, 220);
+});
+
+</script>
+</body>
+</html>
