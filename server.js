@@ -110,6 +110,12 @@ app.get('/', async (req, res) => {
   res.send(renderPage(data, null));
 });
 
-app.listen(PORT, () => {
-  console.log(`Serveur lancé sur http://localhost:${PORT}`);
-});
+// En local : démarre un vrai serveur.
+// Sur Vercel : ce fichier est importé comme fonction serverless, app.listen() n'est jamais appelé.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Serveur lancé sur http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
