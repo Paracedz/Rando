@@ -368,6 +368,37 @@ table.segs tr:last-child td{border-bottom:none;}
 .trk-pin.end{background:var(--clay);}
 .trk-pin.bound{background:var(--forest-deep); width:22px!important; height:22px!important;}
 .trk-pin.bound span{font-size:9.5px;}
+.trk-pin.start2{background:#3C6E8F;}
+.trk-pin.end2{background:#1F4A63;}
+
+.piece-menu{
+  font-family:'Inter',sans-serif;
+  text-align:center;
+}
+.piece-menu-del{
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--clay); color:#fff; border:none;
+  border-radius:6px; padding:7px 12px; font-size:12.5px; font-weight:600;
+  cursor:pointer;
+}
+.piece-menu-del:hover{background:#8C3524;}
+
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(20,24,20,.55);
+  display:none; align-items:center; justify-content:center; z-index:2000;
+}
+.modal-box{
+  background:var(--white); border-radius:12px; padding:24px 26px;
+  max-width:420px; width:90%; box-shadow:0 12px 40px rgba(0,0,0,.3);
+}
+.modal-box h3{font-family:'Fraunces',serif; margin:0 0 10px; font-size:18px; color:var(--forest-deep);}
+.modal-desc{font-size:13px; color:var(--ink-soft); line-height:1.5; margin:0 0 16px;}
+.modal-actions{display:flex; justify-content:flex-end; margin-top:14px;}
+.merge-hint{
+  font-size:12.5px; color:var(--ink-soft); line-height:1.5;
+  background:var(--paper); border:1px dashed var(--contour); border-radius:8px;
+  padding:10px 12px;
+}
 
 /* elevation svg */
 #elevSvg{width:100%; height:100%; display:block;}
@@ -415,6 +446,7 @@ table.segs tr:last-child td{border-bottom:none;}
   <div class="mode-controls" id="advancedModeControls" style="display:none">
     <label class="btn btn-primary" for="fileInput">⤒ Charger un fichier GPX</label>
     <input type="file" id="fileInput" accept=".gpx" />
+    <button class="btn btn-outline" id="addGpxBtn" disabled>➕ Ajouter une GPX</button>
   </div>
 
   <div class="spacer"></div>
@@ -444,6 +476,11 @@ table.segs tr:last-child td{border-bottom:none;}
         </div>
         <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
       </div>
+    </div>
+
+    <div class="card" id="mergeHintCard" style="display:none">
+      <h2>Fusion de parcours</h2>
+      <div class="merge-hint" id="mergeHintText">Cliquez sur un segment sur la carte pour le sélectionner, puis « Supprimer ».</div>
     </div>
 
     <div class="card" id="saveCard">
@@ -507,6 +544,18 @@ table.segs tr:last-child td{border-bottom:none;}
   </main>
 </div>
 
+<div class="modal-overlay" id="addGpxModal">
+  <div class="modal-box">
+    <h3>Ajouter un second parcours</h3>
+    <p class="modal-desc">Le nouveau tracé viendra se superposer au premier sur la carte, chacun avec son propre départ et son arrivée. Cliquez ensuite sur les segments en trop pour les supprimer, jusqu'à n'avoir plus qu'un seul parcours continu.</p>
+    <label class="btn btn-primary" for="secondFileInput">Choisir un fichier .gpx</label>
+    <input type="file" id="secondFileInput" accept=".gpx" style="display:none">
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="closeAddGpxModalBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    ÉTAT
@@ -525,6 +574,17 @@ let bgPolyline = null;
 let segPolylines = [];
 let startMarker = null, endMarker = null;
 let boundMarkers = [];
+
+/* ---- fusion de 2 parcours GPX ---- */
+let mergeMode = false;
+let pieces = [];           // {id, source:'A'|'B', points:[{lat,lon,ele}...]}
+let pieceOrderA = [];      // ids des pièces issues du parcours 1, dans l'ordre d'origine
+let pieceOrderB = [];      // ids des pièces issues du parcours 2, dans l'ordre d'origine
+let selectedPieceId = null;
+let piecePolylines = [];
+let pieceStartMarkerA = null, pieceEndMarkerA = null;
+let pieceStartMarkerB = null, pieceEndMarkerB = null;
+let pieceIdCounter = 0;
 
 /* ============================================================
    CARTE
@@ -777,11 +837,13 @@ function enableUIAfterLoad(){
   document.getElementById('segCount').max = Math.max(2, Math.min(20, Math.floor(points.length/2)));
   document.getElementById('saveStateBtn').disabled = false;
   document.getElementById('exportStateBtn').disabled = false;
+  document.getElementById('addGpxBtn').disabled = false;
 }
 
 /* Applique un état complet (import GPX initial, reprise d'une sauvegarde
    mémoire, ou import d'un fichier .te) : recalcule tout et met à jour l'UI. */
 function applyState(state){
+  if(mergeMode) exitMergeMode(true);
   rawPoints = state.rawPoints.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   points = state.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   cum = computeCum(points);
@@ -1025,11 +1087,21 @@ function clearLayers(){
   if(startMarker){ map.removeLayer(startMarker); startMarker=null; }
   if(endMarker){ map.removeLayer(endMarker); endMarker=null; }
   boundMarkers.forEach(m => map.removeLayer(m)); boundMarkers = [];
+  piecePolylines.forEach(p => map.removeLayer(p)); piecePolylines = [];
+  if(pieceStartMarkerA){ map.removeLayer(pieceStartMarkerA); pieceStartMarkerA=null; }
+  if(pieceEndMarkerA){ map.removeLayer(pieceEndMarkerA); pieceEndMarkerA=null; }
+  if(pieceStartMarkerB){ map.removeLayer(pieceStartMarkerB); pieceStartMarkerB=null; }
+  if(pieceEndMarkerB){ map.removeLayer(pieceEndMarkerB); pieceEndMarkerB=null; }
 }
 
 function renderAll(){
   clearLayers();
+  if(mergeMode){ renderMergeMode(); return; }
   if(points.length === 0) return;
+  renderNormal();
+}
+
+function renderNormal(){
 
   // tracé complet en fond, discret
   bgPolyline = L.polyline(points.map(p=>[p.lat,p.lon]), {
@@ -1099,6 +1171,316 @@ function renderAll(){
   updateSegTable();
   updateElevationProfile();
 }
+
+/* ============================================================
+   FUSION DE 2 PARCOURS GPX
+   ============================================================ */
+
+/* --- géométrie : intersection de segments, découpage aux croisements --- */
+function segIntersect(p1,p2,p3,p4){
+  const x1=p1.lon,y1=p1.lat,x2=p2.lon,y2=p2.lat,x3=p3.lon,y3=p3.lat,x4=p4.lon,y4=p4.lat;
+  const d = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+  if(Math.abs(d) < 1e-14) return null;
+  const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / d;
+  const u = ((x1-x3)*(y1-y2) - (y1-y3)*(x1-x2)) / d;
+  if(t <= 0 || t >= 1 || u <= 0 || u >= 1) return null;
+  return { lat: y1 + t*(y2-y1), lon: x1 + t*(x2-x1), t, u };
+}
+
+function findAllCrossings(ptsA, ptsB){
+  const crossings = [];
+  // garde-fou de performance sur de très gros fichiers
+  if((ptsA.length - 1) * (ptsB.length - 1) > 4_000_000) return crossings;
+  for(let i=0;i<ptsA.length-1;i++){
+    for(let j=0;j<ptsB.length-1;j++){
+      const r = segIntersect(ptsA[i], ptsA[i+1], ptsB[j], ptsB[j+1]);
+      if(r) crossings.push({lat:r.lat, lon:r.lon, posA: i + r.t, posB: j + r.u});
+    }
+  }
+  return crossings;
+}
+
+function splitPolylineAtPositions(pts, crossPoints){
+  // crossPoints: [{pos, lat, lon}] — coordonnées déjà calculées (partagées
+  // entre les deux tracés) pour garantir une jonction strictement identique
+  const sorted = crossPoints.slice().sort((a,b)=>a.pos-b.pos);
+  const result = [];
+  let current = [pts[0]];
+  let cIdx = 0;
+  for(let i=0;i<pts.length-1;i++){
+    while(cIdx < sorted.length && sorted[cIdx].pos >= i && sorted[cIdx].pos < i+1){
+      const t = sorted[cIdx].pos - i;
+      const ele = pts[i].ele + t*((pts[i+1].ele||0) - (pts[i].ele||0));
+      const crossPt = {lat: sorted[cIdx].lat, lon: sorted[cIdx].lon, ele};
+      current.push(crossPt);
+      result.push(current);
+      current = [crossPt];
+      cIdx++;
+    }
+    current.push(pts[i+1]);
+  }
+  result.push(current);
+  return result;
+}
+
+function nodeKey(pt){ return pt.lat.toFixed(8) + ',' + pt.lon.toFixed(8); }
+
+/* --- entrée / sortie du mode fusion --- */
+function enterMergeMode(track2pts){
+  if(points.length === 0){ alert("Chargez d'abord un premier parcours."); return; }
+
+  const ptsA = points.slice(startIdx, endIdx + 1);
+  const ptsB = track2pts;
+  const crossings = findAllCrossings(ptsA, ptsB);
+
+  const splitA = splitPolylineAtPositions(ptsA, crossings.map(c => ({pos:c.posA, lat:c.lat, lon:c.lon})));
+  const splitB = splitPolylineAtPositions(ptsB, crossings.map(c => ({pos:c.posB, lat:c.lat, lon:c.lon})));
+
+  pieces = [];
+  pieceOrderA = splitA.map(pts => {
+    const p = {id: 'p' + (pieceIdCounter++), source:'A', points: pts};
+    pieces.push(p);
+    return p.id;
+  });
+  pieceOrderB = splitB.map(pts => {
+    const p = {id: 'p' + (pieceIdCounter++), source:'B', points: pts};
+    pieces.push(p);
+    return p.id;
+  });
+
+  selectedPieceId = null;
+  mergeMode = true;
+
+  document.getElementById('splitCard').style.display = 'none';
+  document.getElementById('segTableWrap').style.display = 'none';
+  document.getElementById('elevWrap').classList.add('collapsed');
+  document.getElementById('elevToggleBtn').disabled = true;
+  document.getElementById('reverseBtn').disabled = true;
+  document.getElementById('resetBtn').disabled = true;
+  document.getElementById('saveStateBtn').disabled = true;
+  document.getElementById('exportStateBtn').disabled = true;
+  document.getElementById('addGpxBtn').disabled = true;
+  document.getElementById('statsCard').style.display = 'none';
+  document.getElementById('mergeHintCard').style.display = 'block';
+
+  const allPts = pieces.flatMap(p => p.points);
+  map.fitBounds(L.latLngBounds(allPts.map(p=>[p.lat,p.lon])), {padding:[30,30]});
+  updateMergeHint();
+  renderAll();
+}
+
+function exitMergeMode(silent){
+  mergeMode = false;
+  pieces = []; pieceOrderA = []; pieceOrderB = []; selectedPieceId = null;
+  document.getElementById('elevWrap').classList.remove('collapsed');
+  document.getElementById('elevToggleBtn').disabled = false;
+  document.getElementById('reverseBtn').disabled = false;
+  document.getElementById('resetBtn').disabled = false;
+  document.getElementById('saveStateBtn').disabled = false;
+  document.getElementById('exportStateBtn').disabled = false;
+  document.getElementById('addGpxBtn').disabled = false;
+  document.getElementById('mergeHintCard').style.display = 'none';
+  document.getElementById('statsCard').style.display = 'block';
+  document.getElementById('splitCard').style.display = points.length ? 'block' : 'none';
+  document.getElementById('statsBody').style.display = points.length ? 'block' : 'none';
+  document.getElementById('statsEmpty').style.display = points.length ? 'none' : 'block';
+  if(!silent) renderAll();
+}
+
+/* --- rendu du mode fusion --- */
+function renderMergeMode(){
+  pieces.forEach(piece => {
+    const selected = piece.id === selectedPieceId;
+    const baseColor = piece.source === 'A' ? '#2E4A38' : '#3C6E8F';
+    const pl = L.polyline(piece.points.map(p=>[p.lat,p.lon]), {
+      color: selected ? '#1E2822' : baseColor,
+      weight: selected ? 7 : 5,
+      opacity: .92,
+      lineCap: 'round'
+    }).addTo(map);
+    pl.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      selectedPieceId = piece.id;
+      renderAll();
+      openPieceMenu(piece, e.latlng);
+    });
+    piecePolylines.push(pl);
+  });
+
+  // repères de départ/arrivée de chaque parcours d'origine (tant que la
+  // pièce qui porte cette extrémité existe encore)
+  if(pieceOrderA.length){
+    const first = pieces.find(p => p.id === pieceOrderA[0]);
+    const last  = pieces.find(p => p.id === pieceOrderA[pieceOrderA.length-1]);
+    if(first) pieceStartMarkerA = makePieceEndpointMarker(first, 'start', 'start', 'D1', 'Départ parcours 1');
+    if(last)  pieceEndMarkerA   = makePieceEndpointMarker(last, 'end', 'end', 'A1', 'Arrivée parcours 1');
+  }
+  if(pieceOrderB.length){
+    const first = pieces.find(p => p.id === pieceOrderB[0]);
+    const last  = pieces.find(p => p.id === pieceOrderB[pieceOrderB.length-1]);
+    if(first) pieceStartMarkerB = makePieceEndpointMarker(first, 'start', 'start2', 'D2', 'Départ parcours 2');
+    if(last)  pieceEndMarkerB   = makePieceEndpointMarker(last, 'end', 'end2', 'A2', 'Arrivée parcours 2');
+  }
+
+  updateMergeHint();
+}
+
+function makePieceEndpointMarker(piece, endKind, iconClass, label, tooltip){
+  const pt = endKind === 'start' ? piece.points[0] : piece.points[piece.points.length-1];
+  const marker = L.marker([pt.lat, pt.lon], {
+    draggable:true, icon: pinIcon(iconClass, label, 28), zIndexOffset: 1000
+  }).addTo(map).bindTooltip(tooltip + ' — glissez pour déplacer', {direction:'top', offset:[0,-26]});
+  marker.on('dragend', e => {
+    const {lat,lng} = e.target.getLatLng();
+    if(endKind === 'start'){
+      const hi = Math.max(0, piece.points.length - 2);
+      const idx = nearestIndexInArray(piece.points, lat, lng, 0, hi);
+      piece.points = piece.points.slice(idx);
+    } else {
+      const lo = Math.min(1, piece.points.length - 1);
+      const idx = nearestIndexInArray(piece.points, lat, lng, lo, piece.points.length - 1);
+      piece.points = piece.points.slice(0, idx + 1);
+    }
+    renderAll();
+  });
+  return marker;
+}
+
+function nearestIndexInArray(pts, lat, lon, lo, hi){
+  let best = lo, bd = Infinity;
+  for(let i=lo;i<=hi;i++){
+    const d = haversine(lat, lon, pts[i].lat, pts[i].lon);
+    if(d < bd){ bd = d; best = i; }
+  }
+  return best;
+}
+
+/* --- sélection / suppression d'un segment --- */
+function openPieceMenu(piece, latlng){
+  const html = `<div class="piece-menu">
+    <button class="piece-menu-del" data-piece="${piece.id}">🗑 Supprimer ce segment</button>
+  </div>`;
+  L.popup({closeButton:true, offset:[0,-4]})
+    .setLatLng(latlng)
+    .setContent(html)
+    .openOn(map);
+}
+
+document.body.addEventListener('click', e => {
+  const btn = e.target.closest('.piece-menu-del');
+  if(!btn) return;
+  deletePiece(btn.dataset.piece);
+});
+
+function deletePiece(id){
+  pieces = pieces.filter(p => p.id !== id);
+  pieceOrderA = pieceOrderA.filter(pid => pid !== id);
+  pieceOrderB = pieceOrderB.filter(pid => pid !== id);
+  selectedPieceId = null;
+  map.closePopup();
+  const result = analyzeMergeGraph();
+  if(result){ finalizeMerge(result); return; }
+  renderAll();
+}
+
+/* --- détection d'un chemin unique et finalisation --- */
+function analyzeMergeGraph(){
+  if(pieces.length === 0) return null;
+  const adj = new Map();
+  pieces.forEach(p => {
+    const kA = nodeKey(p.points[0]);
+    const kB = nodeKey(p.points[p.points.length-1]);
+    if(!adj.has(kA)) adj.set(kA, []);
+    if(!adj.has(kB)) adj.set(kB, []);
+    adj.get(kA).push({pieceId:p.id, to:kB});
+    adj.get(kB).push({pieceId:p.id, to:kA});
+  });
+  const entries = [...adj.entries()];
+  const deg1 = entries.filter(([,v]) => v.length === 1).map(([k]) => k);
+  const invalid = entries.some(([,v]) => v.length !== 1 && v.length !== 2);
+  if(deg1.length !== 2 || invalid) return null;
+
+  const visited = new Set();
+  const orderedPieceIds = [];
+  let curKey = deg1[0];
+  let guard = 0;
+  while(guard++ < pieces.length + 5){
+    const options = (adj.get(curKey) || []).filter(o => !visited.has(o.pieceId));
+    if(options.length === 0) break;
+    const opt = options[0];
+    visited.add(opt.pieceId);
+    orderedPieceIds.push(opt.pieceId);
+    curKey = opt.to;
+  }
+  if(visited.size !== pieces.length || curKey !== deg1[1]) return null;
+  return {orderedPieceIds, startKey: deg1[0], endKey: deg1[1]};
+}
+
+function finalizeMerge(result){
+  const merged = [];
+  let curKey = result.startKey;
+  result.orderedPieceIds.forEach((pid, idx) => {
+    const piece = pieces.find(p => p.id === pid);
+    const forward = nodeKey(piece.points[0]) === curKey;
+    const seq = forward ? piece.points : piece.points.slice().reverse();
+    merged.push(...(idx === 0 ? seq : seq.slice(1)));
+    curKey = forward ? nodeKey(piece.points[piece.points.length-1]) : nodeKey(piece.points[0]);
+  });
+
+  const mergedPts = merged.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele||0}));
+  exitMergeMode(true);
+  rawPoints = mergedPts;
+  points = mergedPts.slice();
+  cum = computeCum(points);
+  recomputeElevSmooth();
+  startIdx = 0; endIdx = points.length - 1;
+  boundaries = [0, points.length - 1];
+  enableUIAfterLoad();
+  fitToTrack();
+  renderAll();
+  setTimeout(updateElevationProfile, 200);
+}
+
+function updateMergeHint(){
+  const el = document.getElementById('mergeHintText');
+  if(!el) return;
+  const result = analyzeMergeGraph();
+  if(result){
+    el.textContent = "Un seul chemin continu a été détecté — la fusion est terminée.";
+  } else {
+    el.textContent = `${pieces.length} segment(s) restant(s). Cliquez sur un segment sur la carte puis « Supprimer » pour ne garder qu'un seul chemin continu, du départ à l'arrivée.`;
+  }
+}
+
+/* --- ouverture de la modale d'ajout d'un second GPX --- */
+document.getElementById('addGpxBtn').addEventListener('click', () => {
+  document.getElementById('addGpxModal').style.display = 'flex';
+});
+document.getElementById('closeAddGpxModalBtn').addEventListener('click', closeAddGpxModal);
+document.getElementById('addGpxModal').addEventListener('click', e => {
+  if(e.target.id === 'addGpxModal') closeAddGpxModal();
+});
+function closeAddGpxModal(){
+  document.getElementById('addGpxModal').style.display = 'none';
+  document.getElementById('secondFileInput').value = '';
+}
+document.getElementById('secondFileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try{
+      const pts2 = parseGPX(evt.target.result);
+      if(pts2.length < 2) throw new Error('Le second tracé doit contenir au moins 2 points.');
+      closeAddGpxModal();
+      enterMergeMode(pts2);
+    }catch(err){
+      alert('Erreur : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
 
 /* ============================================================
    CARTOUCHES / TABLEAU
