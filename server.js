@@ -1,9 +1,13 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Sert la page d'accueil / authentification (public/index.html)
+app.use(express.static(path.join(__dirname, 'public')));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -96,7 +100,7 @@ function renderPage(users, errorMessage) {
 </html>`;
 }
 
-app.get('/', async (req, res) => {
+app.get('/users', async (req, res) => {
   const { data, error } = await supabase
     .from('users')
     .select('display_name, email, created_at')
