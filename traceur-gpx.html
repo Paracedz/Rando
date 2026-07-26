@@ -252,23 +252,24 @@ main{
   margin-bottom:4px;
 }
 
-.stat-row{display:flex; gap:10px;}
+.stat-row{display:flex; gap:7px;}
 .stat{
   flex:1;
   background:var(--paper);
   border:1px solid var(--line);
-  border-radius:8px;
-  padding:10px 10px;
+  border-radius:7px;
+  padding:7px 6px;
   text-align:center;
 }
 .stat .val{
   font-family:'IBM Plex Mono',monospace;
-  font-size:19px;
+  font-size:14.5px;
   font-weight:600;
   color:var(--forest-deep);
+  white-space:nowrap;
 }
-.stat .val small{font-size:11px; font-weight:500; color:var(--ink-soft);}
-.stat .lbl{font-size:10.5px; color:var(--ink-soft); margin-top:2px; text-transform:uppercase; letter-spacing:.6px;}
+.stat .val small{font-size:9.5px; font-weight:500; color:var(--ink-soft);}
+.stat .lbl{font-size:9px; color:var(--ink-soft); margin-top:1px; text-transform:uppercase; letter-spacing:.4px;}
 .stat.plus .val{color:var(--forest);}
 .stat.minus .val{color:var(--clay);}
 
@@ -540,14 +541,17 @@ table.segs tr:last-child td{border-bottom:none;}
           </div>
           <div class="stat plus">
             <div class="val" id="statPlus">0<small> m</small></div>
-            <div class="lbl">D+ Dénivelé</div>
+            <div class="lbl">D+</div>
           </div>
           <div class="stat minus">
             <div class="val" id="statMinus">0<small> m</small></div>
-            <div class="lbl">D− Dénivelé</div>
+            <div class="lbl">D−</div>
           </div>
         </div>
         <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
+        <div class="actions">
+          <button class="btn btn-outline" id="downloadFullTrackBtn">⇩ Télécharger le parcours complet</button>
+        </div>
       </div>
     </div>
 
@@ -1938,6 +1942,26 @@ function downloadSegmentGPX(i){
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/* Téléchargement du parcours complet (du repère Départ au repère Arrivée).
+   Le bouton qui appelle cette fonction ne vit que dans #statsBody, lequel
+   est masqué pendant une fusion (2 parcours = 2 départs/arrivées) : il n'est
+   donc, par construction, jamais accessible tant qu'il n'y a pas un unique
+   départ et une unique arrivée. */
+function downloadFullTrackGPX(){
+  const subset = points.slice(startIdx, endIdx+1);
+  const gpxStr = pointsToGPX(subset, 'Parcours complet');
+  const blob = new Blob([gpxStr], {type:'application/gpx+xml'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'parcours.gpx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.getElementById('downloadFullTrackBtn').addEventListener('click', downloadFullTrackGPX);
 
 /* ============================================================
    PROFIL D'ALTITUDE (SVG)
