@@ -404,6 +404,63 @@ table.segs tr:last-child td{border-bottom:none;}
 .leaflet-popup-content{font-family:'Inter',sans-serif; font-size:12.5px; line-height:1.4;}
 .leaflet-popup-content b{font-family:'Fraunces',serif; font-size:13.5px;}
 
+/* ---------- fusion de 2 parcours ---------- */
+.trk-pin.start2{background:#3C6E8F;}
+.trk-pin.end2{background:#7A5C8E;}
+
+.btn-disabled-look{opacity:.4; pointer-events:none;}
+
+.modal-overlay{
+  position:fixed; inset:0; z-index:3000;
+  background:rgba(20,24,20,.55);
+  display:none; align-items:center; justify-content:center;
+  padding:20px;
+}
+.modal-box{
+  background:var(--white);
+  border-radius:12px;
+  border:1px solid var(--line);
+  padding:24px 26px;
+  max-width:420px;
+  width:100%;
+  box-shadow:0 12px 30px rgba(0,0,0,.3);
+}
+.modal-box h3{
+  font-family:'Fraunces',serif; font-size:18px; margin:0 0 8px; color:var(--forest-deep);
+}
+.modal-box p{font-size:13px; color:var(--ink-soft); line-height:1.5; margin:0 0 16px;}
+.modal-box .actions{display:flex; flex-direction:column; gap:8px;}
+.modal-box input[type=file]{display:none;}
+
+.merge-banner{
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  z-index:1000; max-width:min(560px, 90%);
+  background:#3a2a12; color:#FBF9F2;
+  padding:11px 14px 11px 16px;
+  border-radius:9px;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  font-size:12.5px; line-height:1.45;
+  display:none; align-items:flex-start; gap:12px;
+}
+.merge-banner button{
+  background:transparent; border:none; color:#FBF9F2;
+  font-size:16px; line-height:1; cursor:pointer; flex-shrink:0; padding:0 2px;
+  opacity:.8;
+}
+.merge-banner button:hover{opacity:1;}
+
+.seg-menu{font-family:'Inter',sans-serif;}
+.seg-menu-title{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--ink-soft); margin-bottom:6px;}
+.seg-menu-del{
+  background:var(--clay); color:#fff; border:none; border-radius:6px;
+  padding:7px 12px; font-size:12.5px; font-weight:600; cursor:pointer;
+  display:flex; align-items:center; gap:6px;
+}
+.seg-menu-del:hover{background:#8C3524;}
+
+#mergeCardBody p{font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin:0 0 8px;}
+#mergeCardBody b{color:var(--ink);}
+
 /* elevation svg */
 #elevSvg{width:100%; height:100%; display:block;}
 
@@ -450,12 +507,25 @@ table.segs tr:last-child td{border-bottom:none;}
   <div class="mode-controls" id="advancedModeControls" style="display:none">
     <label class="btn btn-primary" for="fileInput">⤒ Charger un fichier GPX</label>
     <input type="file" id="fileInput" accept=".gpx" />
+    <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter une GPX</button>
   </div>
 
   <div class="spacer"></div>
   <button class="btn btn-ghost" id="reverseBtn" disabled>⇄ Inverser le sens</button>
   <button class="btn btn-ghost" id="resetBtn" disabled>↺ Réinitialiser</button>
 </header>
+
+<div class="modal-overlay" id="addGpxModalOverlay">
+  <div class="modal-box">
+    <h3>Ajouter un 2ᵉ parcours GPX</h3>
+    <p>Ce 2ᵉ tracé doit croiser le parcours déjà chargé pour permettre la fusion en un seul parcours (un seul départ, une seule arrivée).</p>
+    <div class="actions">
+      <label class="btn btn-primary" for="secondFileInput">⤒ Choisir un fichier GPX</label>
+      <input type="file" id="secondFileInput" accept=".gpx" />
+      <button class="btn btn-outline" id="closeAddGpxModalBtn">Annuler</button>
+    </div>
+  </div>
+</div>
 
 <div class="layout">
   <aside>
@@ -489,6 +559,14 @@ table.segs tr:last-child td{border-bottom:none;}
       </label>
       <div id="poiCategoryList"></div>
       <div class="help">Ces repères viennent des points d'intérêt présents dans le fichier GPX. Cliquez sur un repère pour voir son nom et son type.</div>
+    </div>
+
+    <div class="card" id="mergeCard" style="display:none">
+      <h2>Fusion de parcours</h2>
+      <div id="mergeCardBody"></div>
+      <div class="actions" style="margin-top:6px;">
+        <button class="btn btn-outline" id="cancelMergeBtn">✕ Annuler la fusion</button>
+      </div>
     </div>
 
     <div class="card" id="saveCard">
@@ -529,6 +607,10 @@ table.segs tr:last-child td{border-bottom:none;}
   <main>
     <div style="position:relative; flex:1; min-height:0; width:100%;">
       <div id="map"></div>
+      <div id="mergeInfoBanner" class="merge-banner">
+        <span id="mergeInfoBannerText"></span>
+        <button id="mergeInfoBannerClose" aria-label="Fermer">×</button>
+      </div>
       <button class="map-toggle-btn" id="mapExpandBtn" title="Agrandir la carte">⤢</button>
       <div class="map-empty" id="mapEmpty">
         <div class="map-empty-inner">
@@ -585,6 +667,10 @@ const POI_CAT_META = {
   other:   {label:'Autre',                 emoji:'📍', color:'#8A6D3B'}
 };
 const POI_CAT_ORDER = ['water','toilets','shop','food','lodging','other'];
+
+/* fusion de 2 parcours GPX */
+let mergeState = null; // null hors fusion ; sinon {track2, segments, crossings, hasStart1, hasEnd1, hasStart2, hasEnd2, selectedSegId, layers}
+let mergeBannerTimeout = null;
 
 /* ============================================================
    CARTE
@@ -686,12 +772,101 @@ function elevGainLoss(a,b){
   return {gain, loss};
 }
 function nearestIndex(lat, lon, lo, hi){
+  return nearestIndexIn(points, lat, lon, lo, hi);
+}
+/* Version générique (utilisable sur n'importe quel tableau de points, ex.
+   le 2e parcours lors d'une fusion), la variante ci-dessus ne fait que
+   déléguer ici avec le tableau `points` global pour ne rien casser des
+   usages existants. */
+function nearestIndexIn(pts, lat, lon, lo, hi){
   let best=lo, bd=Infinity;
   for(let i=lo;i<=hi;i++){
-    const d = haversine(lat,lon, points[i].lat, points[i].lon);
+    const d = haversine(lat,lon, pts[i].lat, pts[i].lon);
     if(d<bd){bd=d; best=i;}
   }
   return best;
+}
+
+/* ============================================================
+   GÉOMÉTRIE — croisement de 2 tracés (fusion de parcours)
+   ============================================================ */
+/* Intersection de 2 segments [p1,p2] et [p3,p4], en traitant lon/lat comme
+   des coordonnées planes x/y. À l'échelle d'un parcours de randonnée
+   (quelques dizaines de km maximum), l'erreur induite par cette
+   approximation plane est négligeable devant l'espacement réel entre deux
+   points GPS consécutifs. */
+function segIntersect(p1, p2, p3, p4){
+  const x1=p1.lon, y1=p1.lat, x2=p2.lon, y2=p2.lat;
+  const x3=p3.lon, y3=p3.lat, x4=p4.lon, y4=p4.lat;
+  const d = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+  if(Math.abs(d) < 1e-15) return null; // segments parallèles (ou confondus)
+  const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / d;
+  const u = ((x1-x3)*(y1-y2) - (y1-y3)*(x1-x2)) / d;
+  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return {lat: y1 + t*(y2-y1), lon: x1 + t*(x2-x1)};
+}
+
+/* Recherche de tous les croisements entre le tronçon [lo1,hi1] de pts1 et
+   le tronçon [lo2,hi2] de pts2. Un test naïf serait en O(n×m), bien trop
+   lent pour des traces de plusieurs milliers de points : on indexe donc
+   les segments de pts1 dans une grille spatiale grossière (~300 m de côté)
+   et on ne teste, pour chaque segment de pts2, que les segments de pts1
+   tombant dans les mêmes cellules. */
+function findCrossings(pts1, lo1, hi1, pts2, lo2, hi2){
+  const cellSize = 0.003; // degrés, ~300 m — assez fin pour rester sélectif,
+                           // assez large pour qu'un segment GPS tienne dans 1-4 cellules
+  const grid = {};
+  for(let i=lo1;i<hi1;i++){
+    const a = pts1[i], b = pts1[i+1];
+    const cxa = Math.floor(Math.min(a.lon,b.lon)/cellSize), cxb = Math.floor(Math.max(a.lon,b.lon)/cellSize);
+    const cya = Math.floor(Math.min(a.lat,b.lat)/cellSize), cyb = Math.floor(Math.max(a.lat,b.lat)/cellSize);
+    for(let cx=cxa; cx<=cxb; cx++){
+      for(let cy=cya; cy<=cyb; cy++){
+        const key = cx+'_'+cy;
+        (grid[key] = grid[key] || []).push(i);
+      }
+    }
+  }
+
+  const results = [];
+  for(let j=lo2;j<hi2;j++){
+    const a = pts2[j], b = pts2[j+1];
+    const cxa = Math.floor(Math.min(a.lon,b.lon)/cellSize), cxb = Math.floor(Math.max(a.lon,b.lon)/cellSize);
+    const cya = Math.floor(Math.min(a.lat,b.lat)/cellSize), cyb = Math.floor(Math.max(a.lat,b.lat)/cellSize);
+    const candidates = new Set();
+    for(let cx=cxa; cx<=cxb; cx++){
+      for(let cy=cya; cy<=cyb; cy++){
+        const arr = grid[cx+'_'+cy];
+        if(arr) arr.forEach(i => candidates.add(i));
+      }
+    }
+    candidates.forEach(i => {
+      const inter = segIntersect(pts1[i], pts1[i+1], a, b);
+      if(inter) results.push({i, j, lat: inter.lat, lon: inter.lon});
+    });
+  }
+  return results;
+}
+
+/* Deux traces GPS qui se croisent "une fois" au sens humain produisent
+   souvent plusieurs hits bruts très proches (frottement quasi-tangentiel
+   sur 2-3 points). On regroupe donc les hits consécutifs (triés par indice
+   sur pts1) en un seul croisement logique. */
+function clusterCrossings(raw){
+  if(raw.length === 0) return [];
+  const sorted = raw.slice().sort((a,b) => a.i - b.i);
+  const clusters = [];
+  let current = [sorted[0]];
+  for(let k=1;k<sorted.length;k++){
+    if(sorted[k].i - current[current.length-1].i <= 4){
+      current.push(sorted[k]);
+    } else {
+      clusters.push(current);
+      current = [sorted[k]];
+    }
+  }
+  clusters.push(current);
+  return clusters.map(c => c[Math.floor(c.length/2)]);
 }
 
 /* ============================================================
@@ -896,11 +1071,13 @@ function enableUIAfterLoad(){
   document.getElementById('segCount').max = Math.max(2, Math.min(20, Math.floor(points.length/2)));
   document.getElementById('saveStateBtn').disabled = false;
   document.getElementById('exportStateBtn').disabled = false;
+  document.getElementById('addGpxBtn').disabled = false;
 }
 
 /* Applique un état complet (import GPX initial, reprise d'une sauvegarde
    mémoire, ou import d'un fichier .te) : recalcule tout et met à jour l'UI. */
 function applyState(state){
+  if(mergeState) exitMergeMode();
   rawPoints = state.rawPoints.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   points = state.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   cum = computeCum(points);
@@ -1301,6 +1478,390 @@ function updatePoiCard(){
 document.getElementById('poiMasterToggle').addEventListener('change', e => {
   poiMasterVisible = e.target.checked;
   applyPoiVisibility();
+});
+
+/* ============================================================
+   FUSION DE 2 PARCOURS GPX
+   ============================================================
+   Modèle : chaque parcours (1 = le tracé principal, 2 = celui qu'on vient
+   d'ajouter) est découpé en "segments" délimités par son propre départ/
+   arrivée et par ses points de croisement avec l'autre parcours. Chaque
+   segment relie 2 "nœuds" : 'D1'/'A1'/'D2'/'A2' (départ/arrivée) ou 'Xk'
+   (le k-ième croisement, partagé par les 2 parcours à cet endroit). On
+   supprime des segments jusqu'à ce que ceux qui restent forment un unique
+   chemin continu entre exactement 2 nœuds de type départ/arrivée : à ce
+   moment-là, la fusion est terminée et devient le nouveau parcours officiel. */
+
+function showMergeInfoBanner(text, autoHideMs){
+  const el = document.getElementById('mergeInfoBanner');
+  document.getElementById('mergeInfoBannerText').textContent = text;
+  el.style.display = 'flex';
+  if(mergeBannerTimeout) clearTimeout(mergeBannerTimeout);
+  if(autoHideMs !== 0){
+    mergeBannerTimeout = setTimeout(() => { el.style.display = 'none'; }, autoHideMs || 9000);
+  }
+}
+document.getElementById('mergeInfoBannerClose').addEventListener('click', () => {
+  document.getElementById('mergeInfoBanner').style.display = 'none';
+  if(mergeBannerTimeout) clearTimeout(mergeBannerTimeout);
+});
+
+/* ---- popin d'ajout du 2e fichier ---- */
+function openAddGpxModal(){ document.getElementById('addGpxModalOverlay').style.display = 'flex'; }
+function closeAddGpxModal(){
+  document.getElementById('addGpxModalOverlay').style.display = 'none';
+  document.getElementById('secondFileInput').value = '';
+}
+document.getElementById('addGpxBtn').addEventListener('click', openAddGpxModal);
+document.getElementById('closeAddGpxModalBtn').addEventListener('click', closeAddGpxModal);
+document.getElementById('addGpxModalOverlay').addEventListener('click', e => {
+  if(e.target.id === 'addGpxModalOverlay') closeAddGpxModal();
+});
+document.getElementById('secondFileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => handleSecondGpxText(evt.target.result);
+  reader.readAsText(file);
+});
+
+function handleSecondGpxText(text){
+  try{
+    const {points: pts2} = parseGPX(text);
+    if(pts2.length < 2) throw new Error('Le 2ᵉ tracé doit contenir au moins 2 points.');
+    closeAddGpxModal();
+    startMergeWithSecondTrack(pts2);
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }
+}
+
+function startMergeWithSecondTrack(pts2){
+  const cum2 = computeCum(pts2);
+  const track2 = {rawPoints: pts2, points: pts2.slice(), cum: cum2, startIdx: 0, endIdx: pts2.length - 1};
+
+  const raw = findCrossings(points, startIdx, endIdx, track2.points, track2.startIdx, track2.endIdx);
+  const clusters = clusterCrossings(raw);
+
+  if(clusters.length === 0){
+    showMergeInfoBanner("Les 2 parcours ne se croisent pas : la fusion n'est possible qu'entre parcours qui se croisent. Le 2ᵉ tracé n'a pas été conservé.");
+    return;
+  }
+
+  // on entre en mode fusion : plus de découpage en jours sur le parcours 1
+  boundaries = [startIdx, endIdx];
+  document.getElementById('segTableWrap').style.display = 'none';
+
+  mergeState = {
+    track2,
+    hasStart1: true, hasEnd1: true, hasStart2: true, hasEnd2: true,
+    selectedSegId: null,
+    segments: [],
+    crossings: [],
+    layers: {}
+  };
+  enterMergeModeUI();
+  rebuildMergeModel();
+
+  const allPts = points.slice(startIdx, endIdx+1).concat(track2.points.slice(track2.startIdx, track2.endIdx+1));
+  map.fitBounds(L.latLngBounds(allPts.map(p => [p.lat, p.lon])), {padding:[40,40]});
+}
+
+/* Reconstruit entièrement le modèle de segments à partir des positions
+   actuelles des repères D/A des 2 parcours (repart de zéro : toute
+   suppression de tronçon précédente est réinitialisée — c'est le cas
+   uniquement quand on déplace un repère départ/arrivée en cours de fusion). */
+function rebuildMergeModel(){
+  const t2 = mergeState.track2;
+  mergeState.hasStart1 = true; mergeState.hasEnd1 = true;
+  mergeState.hasStart2 = true; mergeState.hasEnd2 = true;
+  mergeState.selectedSegId = null;
+
+  const raw = findCrossings(points, startIdx, endIdx, t2.points, t2.startIdx, t2.endIdx);
+  const clusters = clusterCrossings(raw);
+
+  const crossings = clusters.map((c, k) => {
+    const i1 = nearestIndexIn(points, c.lat, c.lon, startIdx, endIdx);
+    const j2 = nearestIndexIn(t2.points, c.lat, c.lon, t2.startIdx, t2.endIdx);
+    return {id: 'X'+k, lat: c.lat, lon: c.lon, i1, j2};
+  });
+  mergeState.crossings = crossings;
+
+  if(crossings.length === 0){
+    mergeState.segments = [];
+    showMergeInfoBanner("Les 2 parcours ne se croisent plus dans la zone sélectionnée : ajustez les repères de départ/arrivée, ou annulez la fusion.");
+    renderMergeUI();
+    return;
+  }
+
+  const cuts1 = crossings.map(c => ({idx: c.i1, nodeId: c.id}));
+  const cuts2 = crossings.map(c => ({idx: c.j2, nodeId: c.id}));
+  mergeState.segments = [
+    ...buildTrackSegments(1, startIdx, endIdx, cuts1),
+    ...buildTrackSegments(2, t2.startIdx, t2.endIdx, cuts2)
+  ];
+  renderMergeUI();
+  updateMergeCard();
+}
+
+function buildTrackSegments(trackNum, lo, hi, cutList){
+  const dNode = trackNum === 1 ? 'D1' : 'D2';
+  const aNode = trackNum === 1 ? 'A1' : 'A2';
+  const cuts = [{idx: lo, nodeId: dNode}, ...cutList, {idx: hi, nodeId: aNode}]
+    .sort((a,b) => a.idx - b.idx);
+  const segs = [];
+  for(let k=0;k<cuts.length-1;k++){
+    const a = cuts[k], b = cuts[k+1];
+    if(b.idx <= a.idx) continue; // croisement confondu avec un départ/arrivée : segment nul, on l'ignore
+    segs.push({id: 'seg'+trackNum+'_'+k, track: trackNum, i0: a.idx, i1: b.idx, nodeStart: a.nodeId, nodeEnd: b.nodeId, deleted: false});
+  }
+  return segs;
+}
+
+function clearMergeLayers(){
+  if(!mergeState) return;
+  const L_ = mergeState.layers || {};
+  if(L_.bg1) map.removeLayer(L_.bg1);
+  if(L_.bg2) map.removeLayer(L_.bg2);
+  Object.values(L_.segPolylines || {}).forEach(p => map.removeLayer(p));
+  (L_.crossMarkers || []).forEach(m => map.removeLayer(m));
+  if(L_.startMarker2) map.removeLayer(L_.startMarker2);
+  if(L_.endMarker2) map.removeLayer(L_.endMarker2);
+  mergeState.layers = {};
+}
+
+function renderMergeUI(){
+  clearLayers();       // vide les couches "mode normal" du parcours 1 (marqueurs D/A, tronçons de jours…)
+  clearMergeLayers();
+  if(!mergeState) return;
+  const t2 = mergeState.track2;
+  const layers = {};
+
+  layers.bg1 = L.polyline(points.map(p=>[p.lat,p.lon]), {color:'#E63946', weight:3, opacity:.35, dashArray:'2 7'}).addTo(map);
+  layers.bg2 = L.polyline(t2.points.map(p=>[p.lat,p.lon]), {color:'#E63946', weight:3, opacity:.35, dashArray:'2 7'}).addTo(map);
+
+  layers.segPolylines = {};
+  mergeState.segments.filter(s => !s.deleted).forEach(seg => {
+    const src = seg.track === 1 ? points : t2.points;
+    const latlngs = src.slice(seg.i0, seg.i1+1).map(p => [p.lat, p.lon]);
+    const selected = mergeState.selectedSegId === seg.id;
+    const baseColor = seg.track === 1 ? '#2E4A38' : '#3C6E8F';
+    const poly = L.polyline(latlngs, {
+      color: selected ? '#111' : baseColor,
+      weight: selected ? 8 : 5,
+      opacity: .95, lineCap: 'round'
+    }).addTo(map);
+    poly.on('click', e => { L.DomEvent.stopPropagation(e); selectMergeSegment(seg.id, e.latlng); });
+    layers.segPolylines[seg.id] = poly;
+  });
+
+  layers.crossMarkers = mergeState.crossings.map(c =>
+    L.circleMarker([c.lat, c.lon], {radius:5, color:'#fff', weight:1.5, fillColor:'#1E2822', fillOpacity:1, interactive:false}).addTo(map)
+  );
+
+  if(mergeState.hasStart1){
+    startMarker = L.marker([points[startIdx].lat, points[startIdx].lon], {draggable:true, icon: pinIcon('start','D',30), zIndexOffset:1000})
+      .addTo(map).bindTooltip('Départ parcours 1 — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    startMarker.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
+      startIdx = nearestIndex(lat, lng, 0, endIdx-1);
+      rebuildMergeModel();
+    });
+  }
+  if(mergeState.hasEnd1){
+    endMarker = L.marker([points[endIdx].lat, points[endIdx].lon], {draggable:true, icon: pinIcon('end','A',30), zIndexOffset:1000})
+      .addTo(map).bindTooltip('Arrivée parcours 1 — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    endMarker.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
+      endIdx = nearestIndex(lat, lng, startIdx+1, points.length-1);
+      rebuildMergeModel();
+    });
+  }
+  if(mergeState.hasStart2){
+    layers.startMarker2 = L.marker([t2.points[t2.startIdx].lat, t2.points[t2.startIdx].lon], {draggable:true, icon: pinIcon('start2','D2',30), zIndexOffset:1000})
+      .addTo(map).bindTooltip('Départ parcours 2 — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    layers.startMarker2.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
+      t2.startIdx = nearestIndexIn(t2.points, lat, lng, 0, t2.endIdx-1);
+      rebuildMergeModel();
+    });
+  }
+  if(mergeState.hasEnd2){
+    layers.endMarker2 = L.marker([t2.points[t2.endIdx].lat, t2.points[t2.endIdx].lon], {draggable:true, icon: pinIcon('end2','A2',30), zIndexOffset:1000})
+      .addTo(map).bindTooltip('Arrivée parcours 2 — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    layers.endMarker2.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
+      t2.endIdx = nearestIndexIn(t2.points, lat, lng, t2.startIdx+1, t2.points.length-1);
+      rebuildMergeModel();
+    });
+  }
+
+  mergeState.layers = layers;
+}
+
+function selectMergeSegment(segId, latlng){
+  mergeState.selectedSegId = segId;
+  renderMergeUI();
+  const popup = L.popup({closeButton:true, className:'seg-menu-popup', autoPan:true})
+    .setLatLng(latlng)
+    .setContent('<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div><button class="seg-menu-del" id="segMenuDelBtn">🗑 Supprimer ce tronçon</button></div>')
+    .openOn(map);
+  setTimeout(() => {
+    const btn = document.getElementById('segMenuDelBtn');
+    if(btn) btn.addEventListener('click', () => { map.closePopup(popup); deleteMergeSegment(segId); });
+  }, 0);
+  map.on('popupclose', function onClose(ev){
+    if(ev.popup === popup){
+      mergeState.selectedSegId = null;
+      renderMergeUI();
+      map.off('popupclose', onClose);
+    }
+  });
+}
+
+function deleteMergeSegment(segId){
+  const seg = mergeState.segments.find(s => s.id === segId);
+  if(!seg) return;
+  seg.deleted = true;
+  if(seg.nodeStart === 'D1' || seg.nodeEnd === 'D1') mergeState.hasStart1 = false;
+  if(seg.nodeStart === 'A1' || seg.nodeEnd === 'A1') mergeState.hasEnd1 = false;
+  if(seg.nodeStart === 'D2' || seg.nodeEnd === 'D2') mergeState.hasStart2 = false;
+  if(seg.nodeStart === 'A2' || seg.nodeEnd === 'A2') mergeState.hasEnd2 = false;
+  mergeState.selectedSegId = null;
+  renderMergeUI();
+  updateMergeCard();
+  checkMergeCompletion();
+}
+
+function updateMergeCard(){
+  if(!mergeState) return;
+  const remaining = mergeState.segments.filter(s => !s.deleted);
+  document.getElementById('mergeCardBody').innerHTML = `
+    <p>${mergeState.crossings.length} croisement(s) détecté(s), ${mergeState.segments.length} tronçon(s) au total.</p>
+    <p>Cliquez sur un tronçon de la carte pour le sélectionner, puis supprimez ceux à ne pas garder. Objectif : n'en garder que ${remaining.length > 0 ? '' : ''}ceux qui forment un seul tracé continu, avec un seul départ et une seule arrivée.</p>
+    <p><b>${remaining.length}</b> tronçon(s) restant(s).</p>
+  `;
+}
+
+function isMergeGraphConnected(segments){
+  if(segments.length === 0) return false;
+  const adj = {};
+  segments.forEach(s => {
+    (adj[s.nodeStart] = adj[s.nodeStart] || []).push(s);
+    (adj[s.nodeEnd] = adj[s.nodeEnd] || []).push(s);
+  });
+  const visited = new Set([segments[0].id]);
+  const stack = [segments[0]];
+  while(stack.length){
+    const s = stack.pop();
+    [s.nodeStart, s.nodeEnd].forEach(n => {
+      (adj[n] || []).forEach(s2 => {
+        if(!visited.has(s2.id)){ visited.add(s2.id); stack.push(s2); }
+      });
+    });
+  }
+  return visited.size === segments.length;
+}
+
+function checkMergeCompletion(){
+  const remaining = mergeState.segments.filter(s => !s.deleted);
+  if(remaining.length === 0) return;
+
+  const degree = {};
+  remaining.forEach(s => {
+    degree[s.nodeStart] = (degree[s.nodeStart] || 0) + 1;
+    degree[s.nodeEnd] = (degree[s.nodeEnd] || 0) + 1;
+  });
+  const isDA = n => n === 'D1' || n === 'A1' || n === 'D2' || n === 'A2';
+  const endNodes = Object.keys(degree).filter(n => degree[n] === 1);
+  const degreesOk = Object.values(degree).every(d => d <= 2);
+
+  if(degreesOk && endNodes.length === 2 && endNodes.every(isDA) && isMergeGraphConnected(remaining)){
+    finalizeMerge(remaining, endNodes);
+  }
+}
+
+/* Ordonne les segments restants en un chemin continu, du nœud de départ au
+   nœud d'arrivée, en déterminant pour chacun s'il faut le parcourir dans
+   son sens naturel (i0→i1) ou à l'envers. */
+function orderMergeSegments(segments, startNode){
+  const adj = {};
+  segments.forEach(s => {
+    (adj[s.nodeStart] = adj[s.nodeStart] || []).push({seg: s, other: s.nodeEnd});
+    (adj[s.nodeEnd] = adj[s.nodeEnd] || []).push({seg: s, other: s.nodeStart});
+  });
+  const visited = new Set();
+  const order = [];
+  let current = startNode;
+  while(true){
+    const options = (adj[current] || []).filter(o => !visited.has(o.seg.id));
+    if(options.length === 0) break;
+    const opt = options[0];
+    visited.add(opt.seg.id);
+    order.push({seg: opt.seg, reversed: opt.seg.nodeStart !== current});
+    current = opt.other;
+  }
+  return order;
+}
+
+function finalizeMerge(remaining, endNodes){
+  const startNode = endNodes.find(n => n === 'D1' || n === 'D2') || endNodes[0];
+  const ordered = orderMergeSegments(remaining, startNode);
+  const t2 = mergeState.track2;
+
+  let newPoints = [];
+  ordered.forEach(({seg, reversed}, idx) => {
+    const src = seg.track === 1 ? points : t2.points;
+    let slice = src.slice(seg.i0, seg.i1+1).map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
+    if(reversed) slice = slice.reverse();
+    if(idx > 0) slice = slice.slice(1); // évite de dupliquer le point de jonction
+    newPoints = newPoints.concat(slice);
+  });
+
+  const keepPois = pois;
+  exitMergeMode();
+  loadTrack(newPoints, keepPois);
+  showMergeInfoBanner('Fusion terminée : les 2 parcours ne forment plus qu\'un seul tracé, du départ à l\'arrivée.', 6000);
+}
+
+function enterMergeModeUI(){
+  document.getElementById('statsCard').style.display = 'none';
+  document.getElementById('splitCard').style.display = 'none';
+  document.getElementById('segTableWrap').style.display = 'none';
+  document.getElementById('elevWrap').style.display = 'none';
+  document.getElementById('mergeCard').style.display = 'block';
+  setMergeControlsDisabled(true);
+  setTimeout(() => map.invalidateSize(), 50);
+}
+
+function exitMergeMode(){
+  clearMergeLayers();
+  mergeState = null;
+  document.getElementById('mergeCard').style.display = 'none';
+  document.getElementById('statsCard').style.display = 'block';
+  document.getElementById('splitCard').style.display = 'block';
+  document.getElementById('elevWrap').style.display = '';
+  setMergeControlsDisabled(false);
+  setTimeout(() => map.invalidateSize(), 50);
+}
+
+function setMergeControlsDisabled(disabled){
+  ['reverseBtn','resetBtn','saveStateBtn','exportStateBtn','prepareStepsBtn','baseGpxSelect','splitBtn','segCount'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.disabled = disabled;
+  });
+  document.getElementById('addGpxBtn').disabled = disabled || points.length === 0;
+  document.getElementById('importStateInput').disabled = disabled;
+  const fileLabel = document.querySelector('label[for="fileInput"]');
+  if(fileLabel) fileLabel.classList.toggle('btn-disabled-look', disabled);
+  const importLabel = document.querySelector('label[for="importStateInput"]');
+  if(importLabel) importLabel.classList.toggle('btn-disabled-look', disabled);
+}
+
+document.getElementById('cancelMergeBtn').addEventListener('click', () => {
+  exitMergeMode();
+  fitToTrack();
+  renderAll();
 });
 
 /* ============================================================
