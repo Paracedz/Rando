@@ -537,6 +537,7 @@ table.segs tr:last-child td{border-bottom:none;}
     <label class="btn btn-primary" for="fileInput">⤒ Charger un fichier GPX</label>
     <input type="file" id="fileInput" accept=".gpx" />
     <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter une GPX</button>
+    <button class="btn btn-ghost" id="findPoiBtn" disabled>🔎 Rechercher les POI à proximité</button>
   </div>
 
   <div class="spacer"></div>
@@ -553,6 +554,34 @@ table.segs tr:last-child td{border-bottom:none;}
       <label class="btn btn-primary" for="secondFileInput">⤒ Choisir un fichier GPX</label>
       <input type="file" id="secondFileInput" accept=".gpx" />
       <button class="btn btn-outline" id="closeAddGpxModalBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="findPoiModalOverlay">
+  <div class="modal-box">
+    <h3>Rechercher des POI à proximité</h3>
+    <p>Sélectionnez les types de points d'intérêt à rechercher le long du parcours (rayon de 150 m). Les données viennent d'OpenStreetMap (API Overpass).</p>
+    <div class="actions" style="gap:2px; margin-bottom:14px;">
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiWater" checked>
+        <span class="poi-cat-dot" style="background:#3C6E8F;">💧</span>
+        <span class="poi-cat-label">Points d'eau potable</span>
+      </label>
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiBakery" checked>
+        <span class="poi-cat-dot" style="background:#B5762C;">🥖</span>
+        <span class="poi-cat-label">Boulangeries</span>
+      </label>
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiToilets" checked>
+        <span class="poi-cat-dot" style="background:#7A5C8E;">🚻</span>
+        <span class="poi-cat-label">Toilettes publiques</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="launchFindPoiBtn">🔎 Lancer la recherche</button>
+      <button class="btn btn-outline" id="closeFindPoiModalBtn">Annuler</button>
     </div>
   </div>
 </div>
@@ -1091,15 +1120,18 @@ function buildCorridorAnchors(pts, spacingM){
   return coords;
 }
 
-function buildOverpassQuery(anchors){
+function buildOverpassQuery(anchors, catFilters){
   const coordStr = anchors.map(p => p.lat.toFixed(6) + ',' + p.lon.toFixed(6)).join(',');
   const r = EXTERNAL_POI_QUERY_MARGIN_M;
-  return `[out:json][timeout:30];(`
-    + `node(around:${r},${coordStr})["amenity"="drinking_water"];`
-    + `node(around:${r},${coordStr})["shop"="bakery"];`
-    + `node(around:${r},${coordStr})["amenity"="toilets"];`
-    + `);out body;`;
+  const parts = catFilters.map(f => `node(around:${r},${coordStr})[${f}];`).join('');
+  return `[out:json][timeout:30];(${parts});out body;`;
 }
+
+const EXTERNAL_POI_TAG_FILTERS = {
+  water:   '"amenity"="drinking_water"',
+  bakery:  '"shop"="bakery"',
+  toilets: '"amenity"="toilets"'
+};
 
 async function fetchOverpass(query){
   let lastErr = null;
@@ -1155,16 +1187,21 @@ function minDistanceToTrack(pts, grid, cellSize, lat, lon){
 function showPoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'flex'; }
 function hidePoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'none'; }
 
-/* Récupère les POI externes autour du tracé `pts` et les ajoute à `pois`
-   (en les distinguant par `source:'api'` pour pouvoir les remplacer proprement
-   si l'opération est relancée). N'affecte jamais un tracé chargé après coup :
-   `externalPoiFetchToken` permet d'ignorer une réponse arrivée en retard. */
-async function fetchNearbyPois(pts){
+/* Récupère les POI externes autour du tracé `pts`, pour les catégories
+   demandées uniquement (`cats`, sous-ensemble de ['water','bakery','toilets']),
+   et les ajoute à `pois` (marqués `source:'api'`). Seules les catégories
+   effectivement recherchées sont remplacées : relancer une recherche sur
+   une catégorie ne fait pas disparaître les résultats déjà obtenus pour une
+   autre. `externalPoiFetchToken` permet d'ignorer une réponse arrivée après
+   qu'un autre tracé a été chargé, ou après un "Annuler" (undo).*/
+async function fetchNearbyPois(pts, cats){
+  if(!cats || cats.length === 0) return;
   const myToken = ++externalPoiFetchToken;
   const total = computeCum(pts).slice(-1)[0] || 0;
   const spacing = Math.max(120, total / 900); // borne le nombre d'ancres même sur un très long tracé
   const anchors = buildCorridorAnchors(pts, spacing);
-  const query = buildOverpassQuery(anchors);
+  const catFilters = cats.map(c => EXTERNAL_POI_TAG_FILTERS[c]).filter(Boolean);
+  const query = buildOverpassQuery(anchors, catFilters);
 
   showPoiLoadingPopin();
   try{
@@ -1176,7 +1213,7 @@ async function fetchNearbyPois(pts){
     (data.elements || []).forEach(el => {
       if(el.type !== 'node' || typeof el.lat !== 'number' || typeof el.lon !== 'number') return;
       const cat = classifyExternalPoi(el.tags || {});
-      if(!cat) return;
+      if(!cat || !cats.includes(cat)) return;
       const d = minDistanceToTrack(pts, grid, 0.0015, el.lat, el.lon);
       if(d > EXTERNAL_POI_RADIUS_M) return;
       const tags = el.tags || {};
@@ -1191,11 +1228,12 @@ async function fetchNearbyPois(pts){
       });
     });
 
-    pois = pois.filter(p => p.source !== 'api').concat(found);
+    pois = pois.filter(p => !(p.source === 'api' && cats.includes(p.cat))).concat(found);
     renderPOIs();
   }catch(err){
     if(myToken === externalPoiFetchToken){
       console.warn("Récupération des points d'eau / boulangeries / toilettes impossible :", err);
+      alert("La recherche des POI à proximité a échoué (service Overpass indisponible). Réessayez plus tard.");
     }
   }finally{
     if(myToken === externalPoiFetchToken) hidePoiLoadingPopin();
@@ -1207,7 +1245,6 @@ function handleGpxText(text){
     const {points: pts, pois: poisArr} = parseGPX(text);
     if(pts.length < 2) throw new Error('Le tracé doit contenir au moins 2 points.');
     loadTrack(pts, poisArr);
-    fetchNearbyPois(pts);
   }catch(err){
     alert('Erreur : ' + err.message);
   }
@@ -1328,6 +1365,7 @@ function enableUIAfterLoad(){
   document.getElementById('saveStateBtn').disabled = false;
   document.getElementById('exportStateBtn').disabled = false;
   document.getElementById('addGpxBtn').disabled = false;
+  document.getElementById('findPoiBtn').disabled = false;
 }
 
 /* Applique un état complet (import GPX initial, reprise d'une sauvegarde
@@ -1812,6 +1850,25 @@ document.getElementById('closeAddGpxModalBtn').addEventListener('click', closeAd
 document.getElementById('addGpxModalOverlay').addEventListener('click', e => {
   if(e.target.id === 'addGpxModalOverlay') closeAddGpxModal();
 });
+
+function openFindPoiModal(){ document.getElementById('findPoiModalOverlay').style.display = 'flex'; }
+function closeFindPoiModal(){ document.getElementById('findPoiModalOverlay').style.display = 'none'; }
+document.getElementById('findPoiBtn').addEventListener('click', openFindPoiModal);
+document.getElementById('closeFindPoiModalBtn').addEventListener('click', closeFindPoiModal);
+document.getElementById('findPoiModalOverlay').addEventListener('click', e => {
+  if(e.target.id === 'findPoiModalOverlay') closeFindPoiModal();
+});
+document.getElementById('launchFindPoiBtn').addEventListener('click', () => {
+  if(points.length === 0) return;
+  const cats = [];
+  if(document.getElementById('findPoiWater').checked) cats.push('water');
+  if(document.getElementById('findPoiBakery').checked) cats.push('bakery');
+  if(document.getElementById('findPoiToilets').checked) cats.push('toilets');
+  if(cats.length === 0){ alert('Sélectionnez au moins un type de point à rechercher.'); return; }
+  closeFindPoiModal();
+  fetchNearbyPois(points, cats);
+});
+
 document.getElementById('secondFileInput').addEventListener('change', e => {
   const file = e.target.files[0];
   if(!file) return;
@@ -2147,6 +2204,7 @@ function setMergeControlsDisabled(disabled){
     if(el) el.disabled = disabled;
   });
   document.getElementById('addGpxBtn').disabled = disabled || points.length === 0;
+  document.getElementById('findPoiBtn').disabled = disabled || points.length === 0;
   document.getElementById('importStateInput').disabled = disabled;
   const fileLabel = document.querySelector('label[for="fileInput"]');
   if(fileLabel) fileLabel.classList.toggle('btn-disabled-look', disabled);
