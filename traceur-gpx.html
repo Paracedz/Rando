@@ -408,6 +408,25 @@ table.segs tr:last-child td{border-bottom:none;}
 .leaflet-popup-content{font-family:'Inter',sans-serif; font-size:12.5px; line-height:1.4;}
 .leaflet-popup-content b{font-family:'Fraunces',serif; font-size:13.5px;}
 
+/* ---------- popin de chargement des POI externes (API Overpass) ---------- */
+.poi-loading-popin{
+  position:fixed; inset:0; z-index:5000;
+  background:rgba(20,26,22,.35);
+  display:flex; align-items:center; justify-content:center;
+}
+.poi-loading-box{
+  background:var(--white); border-radius:14px; padding:22px 26px;
+  max-width:300px; display:flex; flex-direction:column; align-items:center; gap:12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.28); text-align:center;
+}
+.poi-loading-spinner{
+  width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  border:4px solid rgba(60,110,143,.2); border-top-color:var(--forest-deep);
+  animation:poiSpin .8s linear infinite;
+}
+.poi-loading-text{font-size:12.5px; color:var(--ink); line-height:1.4;}
+@keyframes poiSpin{ to{ transform:rotate(360deg); } }
+
 /* ---------- fusion de 2 parcours ---------- */
 .trk-pin.start2{background:#3C6E8F;}
 .trk-pin.end2{background:#7A5C8E;}
@@ -488,6 +507,12 @@ table.segs tr:last-child td{border-bottom:none;}
 </style>
 </head>
 <body>
+  <div id="poiLoadingPopin" class="poi-loading-popin" style="display:none">
+    <div class="poi-loading-box">
+      <div class="poi-loading-spinner"></div>
+      <div class="poi-loading-text">Recherche des points d'eau, boulangeries et toilettes à proximité du parcours…</div>
+    </div>
+  </div>
 
 <header>
   <div class="brand">
@@ -700,6 +725,7 @@ function updateUndoBtn(){
 }
 
 function restoreTrackState(state){
+  externalPoiFetchToken++; // invalide toute requête POI externe encore en cours pour l'état qu'on quitte
   rawPoints = state.rawPoints.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   points = state.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   cum = computeCum(points);
@@ -730,12 +756,13 @@ let poiMasterVisible = true;
 const POI_CAT_META = {
   water:   {label:'Eau potable',           emoji:'💧', color:'#3C6E8F'},
   toilets: {label:'Toilettes',             emoji:'🚻', color:'#7A5C8E'},
+  bakery:  {label:'Boulangerie',           emoji:'🥖', color:'#B5762C'},
   shop:    {label:'Épicerie / Alimentation', emoji:'🛒', color:'#C9752E'},
   food:    {label:'Café / Restauration',   emoji:'☕', color:'#A5432E'},
   lodging: {label:'Hébergement',           emoji:'🛏️', color:'#4C6E56'},
   other:   {label:'Autre',                 emoji:'📍', color:'#8A6D3B'}
 };
-const POI_CAT_ORDER = ['water','toilets','shop','food','lodging','other'];
+const POI_CAT_ORDER = ['water','toilets','bakery','shop','food','lodging','other'];
 
 /* fusion de 2 parcours GPX */
 let mergeState = null; // null hors fusion ; sinon {track2, segments, crossings, hasStart1, hasEnd1, hasStart2, hasEnd2, selectedSegId, layers}
@@ -964,7 +991,8 @@ function classifyPoi(typeStr, nameStr){
   const s = stripAccents(((typeStr || '') + ' ' + (nameStr || '')).toLowerCase());
   if(/\b(eau|fontaine|source|potable|robinet)\b/.test(s)) return 'water';
   if(/toilette|wc\b|sanitaire/.test(s)) return 'toilets';
-  if(/epicerie|supermarche|superette|alimentation|boulangerie|boucherie|primeur|commerce/.test(s)) return 'shop';
+  if(/boulangerie|boulanger\b/.test(s)) return 'bakery';
+  if(/epicerie|supermarche|superette|alimentation|boucherie|primeur|commerce/.test(s)) return 'shop';
   if(/cafe|restaurant|restauration|snack|pizza|bar\b|auberge(?!.*(gite|dortoir))/.test(s)) return 'food';
   if(/gite|hotel|camping|refuge|dortoir|hebergement|chambre/.test(s)) return 'lodging';
   return 'other';
@@ -1026,11 +1054,160 @@ function parseGPXPois(xml){
   return out;
 }
 
+/* ============================================================
+   POI EXTERNES (points d'eau, boulangeries, toilettes) — API Overpass
+   ============================================================
+   Au chargement d'un GPX, on interroge Overpass (données OpenStreetMap)
+   le long du corridor du tracé pour compléter automatiquement les POI du
+   fichier avec les points d'eau potable, boulangeries et toilettes publiques
+   répertoriés à proximité. Seuls les résultats à 150 m maximum du tracé
+   (distance réelle au tracé, pas seulement à la zone englobante) sont
+   conservés. */
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+const EXTERNAL_POI_RADIUS_M = 150;       // seuil final, exact, appliqué côté client
+const EXTERNAL_POI_QUERY_MARGIN_M = 220; // rayon envoyé à Overpass (marge de sécurité pour l'échantillonnage)
+let externalPoiFetchToken = 0; // permet d'ignorer une réponse tardive si un autre tracé a entretemps été chargé
+
+/* Échantillonne le tracé tous les `spacingM` mètres de distance cumulée,
+   pour construire la liste de centres du corridor envoyée à Overpass
+   (filtre "around" avec une liste de coordonnées). */
+function buildCorridorAnchors(pts, spacingM){
+  const c = computeCum(pts);
+  const coords = [{lat:pts[0].lat, lon:pts[0].lon}];
+  let next = spacingM;
+  for(let i=1;i<pts.length;i++){
+    if(c[i] >= next){
+      coords.push({lat:pts[i].lat, lon:pts[i].lon});
+      next += spacingM;
+    }
+  }
+  const last = pts[pts.length-1];
+  if(coords[coords.length-1].lat !== last.lat || coords[coords.length-1].lon !== last.lon){
+    coords.push({lat:last.lat, lon:last.lon});
+  }
+  return coords;
+}
+
+function buildOverpassQuery(anchors){
+  const coordStr = anchors.map(p => p.lat.toFixed(6) + ',' + p.lon.toFixed(6)).join(',');
+  const r = EXTERNAL_POI_QUERY_MARGIN_M;
+  return `[out:json][timeout:30];(`
+    + `node(around:${r},${coordStr})["amenity"="drinking_water"];`
+    + `node(around:${r},${coordStr})["shop"="bakery"];`
+    + `node(around:${r},${coordStr})["amenity"="toilets"];`
+    + `);out body;`;
+}
+
+async function fetchOverpass(query){
+  let lastErr = null;
+  for(const url of OVERPASS_ENDPOINTS){
+    try{
+      const res = await fetch(url, {method:'POST', body: 'data=' + encodeURIComponent(query)});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    }catch(err){ lastErr = err; }
+  }
+  throw lastErr || new Error('Overpass indisponible');
+}
+
+function classifyExternalPoi(tags){
+  if(tags.amenity === 'drinking_water') return 'water';
+  if(tags.shop === 'bakery') return 'bakery';
+  if(tags.amenity === 'toilets') return 'toilets';
+  return null;
+}
+
+/* Grille spatiale grossière (mêmes principes que findCrossings) pour
+   retrouver rapidement, pour un point candidat, les points du tracé situés
+   dans son voisinage immédiat plutôt que de comparer à tout le tracé. */
+function buildPointGrid(pts, cellSize){
+  const grid = new Map();
+  pts.forEach((p, idx) => {
+    const key = Math.floor(p.lon/cellSize) + '_' + Math.floor(p.lat/cellSize);
+    if(!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(idx);
+  });
+  return grid;
+}
+
+function minDistanceToTrack(pts, grid, cellSize, lat, lon){
+  const cx = Math.floor(lon/cellSize), cy = Math.floor(lat/cellSize);
+  for(let ring=1; ring<=4; ring++){
+    let best = Infinity;
+    for(let dx=-ring; dx<=ring; dx++){
+      for(let dy=-ring; dy<=ring; dy++){
+        const arr = grid.get((cx+dx)+'_'+(cy+dy));
+        if(!arr) continue;
+        arr.forEach(idx => {
+          const d = haversine(lat, lon, pts[idx].lat, pts[idx].lon);
+          if(d < best) best = d;
+        });
+      }
+    }
+    if(best < Infinity) return best;
+  }
+  return Infinity;
+}
+
+function showPoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'flex'; }
+function hidePoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'none'; }
+
+/* Récupère les POI externes autour du tracé `pts` et les ajoute à `pois`
+   (en les distinguant par `source:'api'` pour pouvoir les remplacer proprement
+   si l'opération est relancée). N'affecte jamais un tracé chargé après coup :
+   `externalPoiFetchToken` permet d'ignorer une réponse arrivée en retard. */
+async function fetchNearbyPois(pts){
+  const myToken = ++externalPoiFetchToken;
+  const total = computeCum(pts).slice(-1)[0] || 0;
+  const spacing = Math.max(120, total / 900); // borne le nombre d'ancres même sur un très long tracé
+  const anchors = buildCorridorAnchors(pts, spacing);
+  const query = buildOverpassQuery(anchors);
+
+  showPoiLoadingPopin();
+  try{
+    const data = await fetchOverpass(query);
+    if(myToken !== externalPoiFetchToken) return; // un autre tracé a été chargé entretemps
+
+    const grid = buildPointGrid(pts, 0.0015);
+    const found = [];
+    (data.elements || []).forEach(el => {
+      if(el.type !== 'node' || typeof el.lat !== 'number' || typeof el.lon !== 'number') return;
+      const cat = classifyExternalPoi(el.tags || {});
+      if(!cat) return;
+      const d = minDistanceToTrack(pts, grid, 0.0015, el.lat, el.lon);
+      if(d > EXTERNAL_POI_RADIUS_M) return;
+      const tags = el.tags || {};
+      const meta = POI_CAT_META[cat];
+      found.push({
+        lat: el.lat, lon: el.lon,
+        name: tags.name || meta.label,
+        type: meta.label,
+        desc: '',
+        cat,
+        source: 'api'
+      });
+    });
+
+    pois = pois.filter(p => p.source !== 'api').concat(found);
+    renderPOIs();
+  }catch(err){
+    if(myToken === externalPoiFetchToken){
+      console.warn("Récupération des points d'eau / boulangeries / toilettes impossible :", err);
+    }
+  }finally{
+    if(myToken === externalPoiFetchToken) hidePoiLoadingPopin();
+  }
+}
+
 function handleGpxText(text){
   try{
     const {points: pts, pois: poisArr} = parseGPX(text);
     if(pts.length < 2) throw new Error('Le tracé doit contenir au moins 2 points.');
     loadTrack(pts, poisArr);
+    fetchNearbyPois(pts);
   }catch(err){
     alert('Erreur : ' + err.message);
   }
