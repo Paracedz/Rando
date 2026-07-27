@@ -286,6 +286,8 @@ main{
 }
 
 .actions{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+.actions.actions-row{flex-direction:row;}
+.actions.actions-row > *{flex:1;}
 
 table.segs{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px;}
 table.segs th{
@@ -534,10 +536,10 @@ table.segs tr:last-child td{border-bottom:none;}
   </div>
 
   <div class="mode-controls" id="advancedModeControls" style="display:none">
-    <label class="btn btn-primary" for="fileInput">⤒ Charger un fichier GPX</label>
+    <label class="btn btn-primary" for="fileInput">⤒ Charger un GPX</label>
     <input type="file" id="fileInput" accept=".gpx" />
-    <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter une GPX</button>
-    <button class="btn btn-ghost" id="findPoiBtn" disabled>🔎 Rechercher les POI à proximité</button>
+    <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter un GPX</button>
+    <button class="btn btn-ghost" id="findPoiBtn" disabled>🔎 Rechercher POI</button>
   </div>
 
   <div class="spacer"></div>
@@ -624,7 +626,7 @@ table.segs tr:last-child td{border-bottom:none;}
         Afficher les POI sur la carte
       </label>
       <div id="poiCategoryList"></div>
-      <div class="help">Ces repères viennent des points d'intérêt présents dans le fichier GPX. Cliquez sur un repère pour voir son nom et son type.</div>
+      <div class="help">Cliquez sur un repère pour voir son nom et son type.</div>
     </div>
 
     <div class="card" id="mergeCard" style="display:none">
@@ -644,9 +646,9 @@ table.segs tr:last-child td{border-bottom:none;}
         <div id="saveList"></div>
       </div>
       <div class="help">Ces sauvegardes restent en mémoire le temps de la session. Exportez-les dans un fichier pour les conserver ou les reprendre plus tard.</div>
-      <div class="actions" style="margin-top:10px;">
-        <button class="btn btn-outline" id="exportStateBtn" disabled>⇩ Exporter l'état (.te)</button>
-        <label class="btn btn-outline import-label" for="importStateInput">⇧ Importer un fichier .te</label>
+      <div class="actions actions-row" style="margin-top:10px;">
+        <button class="btn btn-outline" id="exportStateBtn" disabled>⇩ Exporter (.te)</button>
+        <label class="btn btn-outline import-label" for="importStateInput">⇧ Importer (.te)</label>
         <input type="file" id="importStateInput" accept=".te" style="display:none">
       </div>
     </div>
