@@ -369,6 +369,9 @@ table.segs tr:last-child td{border-bottom:none;}
 .trk-pin.end{background:var(--clay);}
 .trk-pin.bound{background:var(--forest-deep); width:22px!important; height:22px!important;}
 .trk-pin.bound span{font-size:9.5px;}
+.trk-pin.loop{background:linear-gradient(135deg, var(--forest) 50%, var(--clay) 50%); box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 3px rgba(217,164,65,.55);}
+.trk-pin.loop span{font-size:9px;}
+#loopModeBtn.active{background:var(--forest-deep); color:#fff; border-color:var(--forest-deep);}
 
 /* pins des points d'intérêt (POI) */
 .poi-pin{
@@ -548,7 +551,11 @@ table.segs tr:last-child td{border-bottom:none;}
             <div class="lbl">D−</div>
           </div>
         </div>
-        <div class="help" id="statsHelp">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
+        <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
+        <div class="actions" id="loopActions" style="display:none">
+          <button class="btn btn-outline" id="loopModeBtn">🔗 Déplacer le point Départ/Arrivée</button>
+          <div class="help" id="loopHelp" style="display:none">Le parcours est une boucle : glissez le repère <b>D·A</b> à l'endroit souhaité sur le tracé pour y déplacer ensemble le départ et l'arrivée.</div>
+        </div>
         <div class="actions">
           <button class="btn btn-outline" id="downloadFullTrackBtn">⇩ Télécharger le parcours complet</button>
         </div>
@@ -651,24 +658,14 @@ let startIdx = 0;
 let endIdx = 0;
 let boundaries = [];  // ex: [startIdx, b1, b2, ..., endIdx]
 
-/* Parcours "en boucle" : le point de départ et le point d'arrivée d'origine
-   du fichier GPX sont très proches l'un de l'autre (ex. randonnée en boucle
-   qui revient à son point de départ). Dans ce cas, on autorise les repères
-   D et A à être déplacés n'importe où sur le tracé — y compris "au-delà"
-   l'un de l'autre — en faisant pivoter le tableau de travail plutôt qu'en
-   bridant leur position (voir rotateLoopTo ci-dessous). */
-const LOOP_CLOSURE_THRESHOLD_M = 300;
-let isLoopTrack = false;
-function updateLoopDetection(){
-  isLoopTrack = rawPoints.length > 3 &&
-    haversine(rawPoints[0].lat, rawPoints[0].lon, rawPoints[rawPoints.length-1].lat, rawPoints[rawPoints.length-1].lon) < LOOP_CLOSURE_THRESHOLD_M;
-}
-
 let map, osmLayer, topoLayer;
 let bgPolyline = null;
 let segPolylines = [];
 let startMarker = null, endMarker = null;
 let boundMarkers = [];
+let loopMarker = null;      // repère fusionné Départ/Arrivée, affiché uniquement en mode "déplacement de boucle"
+let loopMoveMode = false;   // true tant que l'utilisateur n'a pas reposé le repère fusionné sur le tracé
+const LOOP_THRESHOLD_M = 200; // distance max (m) entre départ et arrivée pour considérer le parcours comme une boucle
 
 let pois = [];              // points d'intérêt (wpt) du fichier chargé, indépendants du tracé
 let poiLayerGroups = {};    // catégorie -> L.layerGroup posé sur la carte
@@ -742,6 +739,16 @@ function computeCum(pts){
   return c;
 }
 function distBetween(a,b){ return cum[b] - cum[a]; }
+
+/* Un parcours est considéré comme une "boucle" quand son départ et son
+   arrivée actuels (repères D et A, pas forcément les extrémités brutes du
+   fichier si l'utilisateur les a déjà déplacés) sont distants d'au plus
+   LOOP_THRESHOLD_M. On l'exige aussi hors découpage en jours actif, pour ne
+   pas mélanger fusion du point de jonction et frontières internes. */
+function isLoopTrack(){
+  if(!points.length || boundaries.length !== 2) return false;
+  return haversine(points[startIdx].lat, points[startIdx].lon, points[endIdx].lat, points[endIdx].lon) <= LOOP_THRESHOLD_M;
+}
 
 /* Le signal d'altitude brut d'un GPX (GPS ou baro) est bruité : de petites
    oscillations de ±1 à 5 m entre points consécutifs, sommées telles quelles,
@@ -1089,18 +1096,15 @@ function enableUIAfterLoad(){
   document.getElementById('saveStateBtn').disabled = false;
   document.getElementById('exportStateBtn').disabled = false;
   document.getElementById('addGpxBtn').disabled = false;
-  document.getElementById('statsHelp').innerHTML = isLoopTrack
-    ? "Ce parcours forme une boucle : les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) peuvent être déplacés n'importe où sur le tracé, y compris au-delà l'un de l'autre."
-    : "Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.";
 }
 
 /* Applique un état complet (import GPX initial, reprise d'une sauvegarde
    mémoire, ou import d'un fichier .te) : recalcule tout et met à jour l'UI. */
 function applyState(state){
   if(mergeState) exitMergeMode();
+  loopMoveMode = false;
   rawPoints = state.rawPoints.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
   points = state.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
-  updateLoopDetection();
   cum = computeCum(points);
   recomputeElevSmooth();
   startIdx = state.startIdx;
@@ -1135,6 +1139,7 @@ function fitToTrack(){
    ============================================================ */
 document.getElementById('reverseBtn').addEventListener('click', () => {
   if(points.length === 0) return;
+  loopMoveMode = false;
   const n = points.length;
   points = points.slice().reverse();
   cum = computeCum(points);
@@ -1148,6 +1153,7 @@ document.getElementById('reverseBtn').addEventListener('click', () => {
 
 document.getElementById('resetBtn').addEventListener('click', () => {
   if(rawPoints.length === 0) return;
+  loopMoveMode = false;
   points = rawPoints.slice();
   cum = computeCum(points);
   recomputeElevSmooth();
@@ -1347,23 +1353,8 @@ function clearLayers(){
   segPolylines.forEach(p => map.removeLayer(p)); segPolylines = [];
   if(startMarker){ map.removeLayer(startMarker); startMarker=null; }
   if(endMarker){ map.removeLayer(endMarker); endMarker=null; }
+  if(loopMarker){ map.removeLayer(loopMarker); loopMarker=null; }
   boundMarkers.forEach(m => map.removeLayer(m)); boundMarkers = [];
-}
-
-/* Fait pivoter le tableau de travail `points` pour qu'il commence au point
-   d'indice `newStart` (dans le référentiel actuel), et replace le second
-   repère (dont l'indice courant est `otherOldIdx`) au bon endroit dans ce
-   nouveau référentiel. Utilisé uniquement pour les parcours en boucle, où
-   "avant l'indice 0" a un sens géographique (on reboucle vers la fin du
-   tableau). Renvoie le nouvel indice de l'autre repère. */
-function rotateLoopTo(newStart, otherOldIdx){
-  const n = points.length;
-  points = points.slice(newStart).concat(points.slice(0, newStart));
-  cum = computeCum(points);
-  recomputeElevSmooth();
-  let newOther = ((otherOldIdx - newStart) % n + n) % n;
-  if(newOther === 0) newOther = n - 1; // cas dégénéré : repère déplacé sur l'autre repère
-  return newOther;
 }
 
 function renderAll(){
@@ -1384,61 +1375,59 @@ function renderAll(){
     segPolylines.push(pl);
   }
 
-  // repère départ
-  startMarker = L.marker([points[startIdx].lat, points[startIdx].lon], {
-    draggable:true, icon: pinIcon('start','D',30), zIndexOffset: 1000
-  }).addTo(map).bindTooltip(
-    isLoopTrack ? 'Départ — parcours en boucle : glissez n\'importe où sur le tracé' : 'Départ — glissez pour déplacer',
-    {direction:'top', offset:[0,-28]}
-  );
-  startMarker.on('dragend', e => {
-    const {lat,lng} = e.target.getLatLng();
-    if(isLoopTrack){
-      // parcours en boucle : le repère peut être déplacé n'importe où sur le
-      // tracé, y compris "au-delà" du repère d'arrivée (on reboucle) — on
-      // pivote donc le tableau de travail plutôt que de brider la position.
-      const k = nearestIndex(lat, lng, 0, points.length - 1);
-      endIdx = rotateLoopTo(k, endIdx);
-      startIdx = 0;
-      boundaries = [startIdx, endIdx];
-      document.getElementById('segTableWrap').style.display = 'none';
-    } else {
+  if(loopMoveMode && isLoopTrack()){
+    // mode "déplacement du point de jonction" : Départ et Arrivée sont
+    // fusionnés en un seul repère, déplaçable n'importe où sur le tracé.
+    loopMarker = L.marker([points[startIdx].lat, points[startIdx].lon], {
+      draggable:true, icon: pinIcon('loop','D·A',34), zIndexOffset: 1100
+    }).addTo(map).bindTooltip('Point Départ/Arrivée — glissez-le à l’endroit voulu sur le parcours', {direction:'top', offset:[0,-30]});
+    loopMarker.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
+      const m = nearestIndex(lat, lng, 0, points.length - 1);
+      if(m > 0 && m < points.length - 1){
+        // Reboucle le parcours en repartant du point choisi : le point M
+        // devient à la fois le nouveau départ et la nouvelle arrivée, et
+        // l'ancienne jonction (bout à bout des deux extrémités d'origine)
+        // se retrouve, elle, au milieu du tracé, sans discontinuité.
+        points = points.slice(m).concat(points.slice(0, m + 1));
+        cum = computeCum(points);
+        recomputeElevSmooth();
+        startIdx = 0;
+        endIdx = points.length - 1;
+        boundaries = [startIdx, endIdx];
+      }
+      loopMoveMode = false;
+      renderAll();
+    });
+  } else {
+    // repère départ
+    startMarker = L.marker([points[startIdx].lat, points[startIdx].lon], {
+      draggable:true, icon: pinIcon('start','D',30), zIndexOffset: 1000
+    }).addTo(map).bindTooltip('Départ — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    startMarker.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
       // le départ ne peut pas dépasser la première frontière interne (le jour 1
       // seul est raccourci/allongé, les jours suivants restent inchangés)
       const hi = boundaries.length > 2 ? Math.min(endIdx-1, boundaries[1]-1) : endIdx-1;
       startIdx = nearestIndex(lat, lng, 0, Math.max(0, hi));
       boundaries[0] = startIdx;
-    }
-    renderAll();
-  });
+      renderAll();
+    });
 
-  // repère arrivée
-  endMarker = L.marker([points[endIdx].lat, points[endIdx].lon], {
-    draggable:true, icon: pinIcon('end','A',30), zIndexOffset: 1000
-  }).addTo(map).bindTooltip(
-    isLoopTrack ? 'Arrivée — parcours en boucle : glissez n\'importe où sur le tracé' : 'Arrivée — glissez pour déplacer',
-    {direction:'top', offset:[0,-28]}
-  );
-  endMarker.on('dragend', e => {
-    const {lat,lng} = e.target.getLatLng();
-    if(isLoopTrack){
-      // parcours en boucle : on pivote pour que le départ actuel reste en
-      // place (indice 0) et on replace l'arrivée à l'endroit choisi, même
-      // "avant" l'ancien départ dans le tableau (on reboucle par la fin).
-      const k = nearestIndex(lat, lng, 0, points.length - 1);
-      endIdx = rotateLoopTo(startIdx, k);
-      startIdx = 0;
-      boundaries = [startIdx, endIdx];
-      document.getElementById('segTableWrap').style.display = 'none';
-    } else {
+    // repère arrivée
+    endMarker = L.marker([points[endIdx].lat, points[endIdx].lon], {
+      draggable:true, icon: pinIcon('end','A',30), zIndexOffset: 1000
+    }).addTo(map).bindTooltip('Arrivée — glissez pour déplacer', {direction:'top', offset:[0,-28]});
+    endMarker.on('dragend', e => {
+      const {lat,lng} = e.target.getLatLng();
       // l'arrivée ne peut pas dépasser la dernière frontière interne (seul le
       // dernier jour est raccourci/allongé, les précédents restent inchangés)
       const lo = boundaries.length > 2 ? Math.max(startIdx+1, boundaries[boundaries.length-2]+1) : startIdx+1;
       endIdx = nearestIndex(lat, lng, Math.min(lo, points.length-1), points.length-1);
       boundaries[boundaries.length-1] = endIdx;
-    }
-    renderAll();
-  });
+      renderAll();
+    });
+  }
 
   // repères de tronçons internes
   if(boundaries.length > 2){
@@ -1890,6 +1879,7 @@ function finalizeMerge(remaining, endNodes){
 }
 
 function enterMergeModeUI(){
+  loopMoveMode = false;
   document.getElementById('statsCard').style.display = 'none';
   document.getElementById('splitCard').style.display = 'none';
   document.getElementById('segTableWrap').style.display = 'none';
@@ -1941,7 +1931,30 @@ function updateStats(){
   document.getElementById('statLength').innerHTML = fmtKm(total) + '<small> km</small>';
   document.getElementById('statPlus').innerHTML = '+' + fmtM(gain) + '<small> m</small>';
   document.getElementById('statMinus').innerHTML = '−' + fmtM(loss) + '<small> m</small>';
+  updateLoopUI();
 }
+
+/* Affiche/masque le bouton de fusion Départ/Arrivée selon que le parcours
+   est actuellement une boucle, et reflète l'état (actif / inactif) du mode
+   de déplacement en cours. */
+function updateLoopUI(){
+  const wrap = document.getElementById('loopActions');
+  const btn = document.getElementById('loopModeBtn');
+  const help = document.getElementById('loopHelp');
+  const loop = !mergeState && isLoopTrack();
+  if(!loop && loopMoveMode) loopMoveMode = false;
+  wrap.style.display = loop ? 'flex' : 'none';
+  if(!loop) return;
+  btn.classList.toggle('active', loopMoveMode);
+  btn.textContent = loopMoveMode ? '✕ Annuler le déplacement' : '🔗 Déplacer le point Départ/Arrivée';
+  help.style.display = loopMoveMode ? 'block' : 'none';
+}
+
+document.getElementById('loopModeBtn').addEventListener('click', () => {
+  if(mergeState || !isLoopTrack()) return;
+  loopMoveMode = !loopMoveMode;
+  renderAll();
+});
 
 function updateSegTable(){
   const wrap = document.getElementById('segTableWrap');
