@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Traceur — Prépare tes étapes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="/app/traceur.css" />
+<style>
+  #accountBar {
+    display:flex; align-items:center; gap:12px;
+    padding:6px 16px; background:#14201A; color:#C9D6C9;
+    font-family:'Inter',sans-serif; font-size:12px; flex-shrink:0;
+  }
+  #accountBar .email { opacity:.8; flex:1; }
+  #accountBar .plan { font-weight:700; color:#D9A441; }
+  #accountBar button {
+    background:transparent; border:1px solid rgba(255,255,255,.3); color:#fff;
+    border-radius:6px; padding:4px 10px; font-size:11.5px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+  <div id="accountBar">
+    <span class="plan">__PLAN_LABEL__</span>
+    <span class="email">__USER_EMAIL__</span>
+    <button id="logoutBtn">Se déconnecter</button>
+  </div>
+
+  <div id="poiLoadingPopin" class="poi-loading-popin" style="display:none">
+    <div class="poi-loading-box">
+      <div class="poi-loading-spinner"></div>
+      <div class="poi-loading-text" id="poiLoadingText">Recherche des points à proximité du parcours…</div>
+    </div>
+  </div>
+
+<header>
+  <div class="brand">
+    <h1>Traceur</h1>
+    <span class="tagline">Prépare tes étapes</span>
+  </div>
+
+  <div class="mode-switch" role="tablist">
+    <button class="mode-btn active" id="modeSimpleBtn" data-mode="simple" role="tab" aria-selected="true">Mode simple</button>
+    <button class="mode-btn" id="modeAdvancedBtn" data-mode="advanced" role="tab" aria-selected="false">Mode avancé</button>
+  </div>
+
+  <div class="mode-controls" id="simpleModeControls">
+    <select id="baseGpxSelect" disabled>
+      <option value="">Chargement du dossier base-gpx…</option>
+    </select>
+    <button class="btn btn-primary" id="prepareStepsBtn" disabled>🚀 Préparer mes étapes</button>
+    <span class="base-gpx-hint" id="baseGpxHint" style="display:none"></span>
+  </div>
+
+  <div class="mode-controls" id="advancedModeControls" style="display:none">
+    <label class="btn btn-primary" for="fileInput">⤒ Charger un GPX</label>
+    <input type="file" id="fileInput" accept=".gpx" />
+    <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter un GPX</button>
+    <button class="btn btn-ghost" id="findPoiBtn" disabled>🔎 Rechercher POI</button>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" id="undoBtn" disabled title="Annuler la dernière action">↩ Annuler</button>
+  <button class="btn btn-ghost" id="reverseBtn" disabled>⇄ Inverser le sens</button>
+  <button class="btn btn-ghost" id="resetBtn" disabled>↺ Réinitialiser</button>
+</header>
+
+<div class="modal-overlay" id="addGpxModalOverlay">
+  <div class="modal-box">
+    <h3>Ajouter un 2ᵉ parcours GPX</h3>
+    <p>Ce 2ᵉ tracé doit croiser le parcours déjà chargé pour permettre la fusion en un seul parcours (un seul départ, une seule arrivée).</p>
+    <div class="actions">
+      <label class="btn btn-primary" for="secondFileInput">⤒ Choisir un fichier GPX</label>
+      <input type="file" id="secondFileInput" accept=".gpx" />
+      <button class="btn btn-outline" id="closeAddGpxModalBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="findPoiModalOverlay">
+  <div class="modal-box">
+    <h3>Rechercher des POI à proximité</h3>
+    <p>Sélectionnez les types de points d'intérêt à rechercher le long du parcours (rayon de 150 m). Les données viennent d'OpenStreetMap (API Overpass).</p>
+    <div class="actions" style="gap:2px; margin-bottom:14px;">
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiWater" checked>
+        <span class="poi-cat-dot" style="background:#3C6E8F;">💧</span>
+        <span class="poi-cat-label">Points d'eau potable</span>
+      </label>
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiBakery" checked>
+        <span class="poi-cat-dot" style="background:#B5762C;">🥖</span>
+        <span class="poi-cat-label">Boulangeries</span>
+      </label>
+      <label class="poi-cat-row" style="border-bottom:none;">
+        <input type="checkbox" id="findPoiToilets" checked>
+        <span class="poi-cat-dot" style="background:#7A5C8E;">🚻</span>
+        <span class="poi-cat-label">Toilettes publiques</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="launchFindPoiBtn">🔎 Lancer la recherche</button>
+      <button class="btn btn-outline" id="closeFindPoiModalBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <aside>
+    <div class="card" id="statsCard">
+      <h2>Parcours</h2>
+      <div id="statsEmpty" class="empty-hint">Aucun fichier chargé. Importez un GPX pour afficher la longueur et le dénivelé.</div>
+      <div id="statsBody" style="display:none">
+        <div class="stat-row">
+          <div class="stat">
+            <div class="val" id="statLength">0.0<small> km</small></div>
+            <div class="lbl">Longueur</div>
+          </div>
+          <div class="stat plus">
+            <div class="val" id="statPlus">0<small> m</small></div>
+            <div class="lbl">D+</div>
+          </div>
+          <div class="stat minus">
+            <div class="val" id="statMinus">0<small> m</small></div>
+            <div class="lbl">D−</div>
+          </div>
+        </div>
+        <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
+        <div class="actions" id="loopActions" style="display:none">
+          <button class="btn btn-outline" id="loopModeBtn">🔗 Déplacer le point Départ/Arrivée</button>
+          <div class="help" id="loopHelp" style="display:none">Le parcours est une boucle : glissez le repère <b>D·A</b> à l'endroit souhaité sur le tracé pour y déplacer ensemble le départ et l'arrivée.</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outline" id="downloadFullTrackBtn">⇩ Télécharger le parcours complet</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="poiCard" style="display:none">
+      <h2>Points d'intérêt</h2>
+      <label class="poi-master-row" for="poiMasterToggle">
+        <input type="checkbox" id="poiMasterToggle" checked>
+        Afficher les POI sur la carte
+      </label>
+      <div id="poiCategoryList"></div>
+      <div class="help">Cliquez sur un repère pour voir son nom et son type.</div>
+    </div>
+
+    <div class="card" id="mergeCard" style="display:none">
+      <h2>Fusion de parcours</h2>
+      <div id="mergeCardBody"></div>
+      <div class="actions" style="margin-top:6px;">
+        <button class="btn btn-outline" id="cancelMergeBtn">✕ Annuler la fusion</button>
+      </div>
+    </div>
+
+    <div class="card" id="saveCard">
+      <h2>Sauvegardes</h2>
+      <div class="actions">
+        <button class="btn btn-outline" id="saveStateBtn" disabled>💾 Sauvegarder l'état actuel</button>
+      </div>
+      <div id="saveListWrap" style="display:none">
+        <div id="saveList"></div>
+      </div>
+      <div class="help">Ces sauvegardes restent en mémoire le temps de la session. Exportez-les dans un fichier pour les conserver ou les reprendre plus tard.</div>
+      <div class="actions actions-row" style="margin-top:10px;">
+        <button class="btn btn-outline" id="exportStateBtn" disabled>⇩ Exporter (.te)</button>
+        <label class="btn btn-outline import-label" for="importStateInput">⇧ Importer (.te)</label>
+        <input type="file" id="importStateInput" accept=".te" style="display:none">
+      </div>
+    </div>
+
+    <div class="card" id="splitCard" style="display:none">
+      <h2>Découpage en jours</h2>
+      <div class="field-row">
+        <label for="segCount">Nombre de jours</label>
+        <input type="number" id="segCount" min="2" max="20" value="4">
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" id="splitBtn">✂ Découper le parcours</button>
+      </div>
+      <div id="segTableWrap" style="display:none">
+        <table class="segs">
+          <thead><tr><th>Jour</th><th>Longueur</th><th>D+</th><th>D−</th><th></th></tr></thead>
+          <tbody id="segTableBody"></tbody>
+        </table>
+        <div class="help">Faites glisser les repères numérotés sur la carte pour ajuster une frontière : les deux jours voisins se recalculent aussitôt. La corbeille supprime un jour ; le jour suivant s'agrandit pour prendre sa place (le précédent, si c'est le dernier jour).</div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div style="position:relative; flex:1; min-height:0; width:100%;">
+      <div id="map"></div>
+      <div id="mergeInfoBanner" class="merge-banner">
+        <span id="mergeInfoBannerText"></span>
+        <button id="mergeInfoBannerClose" aria-label="Fermer">×</button>
+      </div>
+      <button class="map-toggle-btn" id="mapExpandBtn" title="Agrandir la carte">⤢</button>
+      <div class="map-empty" id="mapEmpty">
+        <div class="map-empty-inner">
+          <h3>Aucun tracé</h3>
+          <p>Chargez un fichier .gpx pour l'afficher sur le fond topographique, avec courbes de niveau, longueur et dénivelé.</p>
+        </div>
+      </div>
+    </div>
+    <div id="elevWrap">
+      <div class="elev-header">
+        <span class="elev-title">Profil d'altitude</span>
+        <span class="elev-hover-info" id="elevHoverInfo"></span>
+        <div class="elev-spacer"></div>
+        <button class="mini-btn" id="elevToggleBtn" title="Replier le profil">⌄</button>
+      </div>
+      <div id="elevBody">
+        <svg id="elevSvg" viewBox="0 0 1000 150" preserveAspectRatio="none"></svg>
+        <div class="elev-tooltip" id="elevTooltip"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/login.html';
+  });
+</script>
+<script src="/app/traceur.js"></script>
+</body>
+</html>
