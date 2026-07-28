@@ -512,7 +512,7 @@ table.segs tr:last-child td{border-bottom:none;}
   <div id="poiLoadingPopin" class="poi-loading-popin" style="display:none">
     <div class="poi-loading-box">
       <div class="poi-loading-spinner"></div>
-      <div class="poi-loading-text">Recherche des points d'eau, boulangeries et toilettes à proximité du parcours…</div>
+      <div class="poi-loading-text" id="poiLoadingText">Recherche des points à proximité du parcours…</div>
     </div>
   </div>
 
@@ -1186,7 +1186,26 @@ function minDistanceToTrack(pts, grid, cellSize, lat, lon){
   return Infinity;
 }
 
-function showPoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'flex'; }
+const EXTERNAL_POI_SEARCH_LABELS = {
+  water:   "points d'eau potable",
+  bakery:  'boulangeries',
+  toilets: 'toilettes publiques'
+};
+
+function joinFr(list){
+  if(list.length === 0) return '';
+  if(list.length === 1) return list[0];
+  return list.slice(0, -1).join(', ') + ' et ' + list[list.length - 1];
+}
+
+function showPoiLoadingPopin(cats){
+  const labels = (cats || []).map(c => EXTERNAL_POI_SEARCH_LABELS[c]).filter(Boolean);
+  const text = labels.length
+    ? `Recherche des ${joinFr(labels)} à proximité du parcours…`
+    : 'Recherche des points à proximité du parcours…';
+  document.getElementById('poiLoadingText').textContent = text;
+  document.getElementById('poiLoadingPopin').style.display = 'flex';
+}
 function hidePoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'none'; }
 
 /* Récupère les POI externes autour du tracé `pts`, pour les catégories
@@ -1205,7 +1224,7 @@ async function fetchNearbyPois(pts, cats){
   const catFilters = cats.map(c => EXTERNAL_POI_TAG_FILTERS[c]).filter(Boolean);
   const query = buildOverpassQuery(anchors, catFilters);
 
-  showPoiLoadingPopin();
+  showPoiLoadingPopin(cats);
   try{
     const data = await fetchOverpass(query);
     if(myToken !== externalPoiFetchToken) return; // un autre tracé a été chargé entretemps
