@@ -232,7 +232,7 @@ function nearestIndexIn(pts, lat, lon, lo, hi){
    Ce modèle gère correctement les portions où les 2 tracés suivent le
    même sentier sur une certaine distance (pas seulement un point unique
    d'intersection). */
-const JOIN_SPLIT_THRESHOLD_M = 20;
+const JOIN_SPLIT_THRESHOLD_M = 30;
 // Nombre de points consécutifs requis dans le nouvel état avant de
 // confirmer une transition : évite qu'un bruit GPS pile au seuil ne
 // génère une rafale de faux croisements très rapprochés.
