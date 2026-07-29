@@ -1323,6 +1323,17 @@ function clearMergeLayers(){
   mergeState.layers = {};
 }
 
+/* Coordonnée canonique de chaque nœud de croisement — i1 (tracé 1) et j2
+   (tracé 2) ne sont que les points les plus proches sur chacun des 2
+   tracés, pas forcément exactement la même coordonnée. Sert à "accrocher"
+   visuellement les tronçons entre eux à chaque croisement, aussi bien
+   pendant l'édition (renderMergeUI) qu'au moment de la fusion finale. */
+function crossingCoordMap(){
+  const m = {};
+  (mergeState.crossings || []).forEach(c => { m[c.id] = {lat: c.lat, lon: c.lon}; });
+  return m;
+}
+
 function renderMergeUI(){
   clearLayers();       // vide les couches "mode normal" du parcours 1 (marqueurs D/A, tronçons de jours…)
   clearMergeLayers();
@@ -1334,9 +1345,16 @@ function renderMergeUI(){
   layers.bg2 = L.polyline(t2.points.map(p=>[p.lat,p.lon]), {color:'#E63946', weight:3, opacity:.35, dashArray:'2 7'}).addTo(map);
 
   layers.segPolylines = {};
+  const coordMap = crossingCoordMap();
   mergeState.segments.filter(s => !s.deleted).forEach(seg => {
     const src = seg.track === 1 ? points : t2.points;
     const latlngs = src.slice(seg.i0, seg.i1+1).map(p => [p.lat, p.lon]);
+    // Accroche visuellement les 2 extrémités du tronçon sur la coordonnée
+    // canonique du croisement, si elles en touchent un : les tronçons
+    // restants se rejoignent alors sans décalage dès qu'on supprime un
+    // tronçon, sans attendre la fusion finale.
+    if(coordMap[seg.nodeStart]) latlngs[0] = [coordMap[seg.nodeStart].lat, coordMap[seg.nodeStart].lon];
+    if(coordMap[seg.nodeEnd]) latlngs[latlngs.length - 1] = [coordMap[seg.nodeEnd].lat, coordMap[seg.nodeEnd].lon];
     const selected = mergeState.selectedSegId === seg.id;
     const baseColor = seg.track === 1 ? '#2E4A38' : '#3C6E8F';
     const poly = L.polyline(latlngs, {
@@ -1549,13 +1567,7 @@ function finalizeMerge(remaining, endNodes){
   const ordered = orderMergeSegments(remaining, startNode);
   const t2 = mergeState.track2;
 
-  // Coordonnée canonique de chaque croisement : i1 (sur le tracé 1) et j2
-  // (sur le tracé 2) ne sont que les points les plus proches sur chacun des
-  // 2 tracés, pas forcément exactement la même coordonnée. Sans correction,
-  // ça laissait un petit saut dans le tracé final à chaque jonction entre
-  // 2 tronçons issus de tracés différents.
-  const crossingCoord = {};
-  mergeState.crossings.forEach(c => { crossingCoord[c.id] = {lat: c.lat, lon: c.lon}; });
+  const crossingCoord = crossingCoordMap();
 
   let newPoints = [];
   ordered.forEach(({seg, reversed}, idx) => {
