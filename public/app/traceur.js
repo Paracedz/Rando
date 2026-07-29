@@ -223,83 +223,66 @@ function nearestIndexIn(pts, lat, lon, lo, hi){
 /* ============================================================
    GÉOMÉTRIE — croisement de 2 tracés (fusion de parcours)
    ============================================================ */
-/* Intersection de 2 segments [p1,p2] et [p3,p4], en traitant lon/lat comme
-   des coordonnées planes x/y. À l'échelle d'un parcours de randonnée
-   (quelques dizaines de km maximum), l'erreur induite par cette
-   approximation plane est négligeable devant l'espacement réel entre deux
-   points GPS consécutifs. */
-function segIntersect(p1, p2, p3, p4){
-  const x1=p1.lon, y1=p1.lat, x2=p2.lon, y2=p2.lat;
-  const x3=p3.lon, y3=p3.lat, x4=p4.lon, y4=p4.lat;
-  const d = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
-  if(Math.abs(d) < 1e-15) return null; // segments parallèles (ou confondus)
-  const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / d;
-  const u = ((x1-x3)*(y1-y2) - (y1-y3)*(x1-x2)) / d;
-  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
-  return {lat: y1 + t*(y2-y1), lon: x1 + t*(x2-x1)};
+/* Un "croisement" est défini par la proximité réelle entre les 2 tracés,
+   pas par une intersection géométrique exacte des segments :
+   - les 2 tracés sont considérés "joints" tant qu'ils restent à moins de
+     JOIN_SPLIT_THRESHOLD_M l'un de l'autre ;
+   - le passage sous ce seuil (jonction) et le passage au-dessus
+     (séparation) sont chacun un point de croisement.
+   Ce modèle gère correctement les portions où les 2 tracés suivent le
+   même sentier sur une certaine distance (pas seulement un point unique
+   d'intersection). */
+const JOIN_SPLIT_THRESHOLD_M = 10;
+// Nombre de points consécutifs requis dans le nouvel état avant de
+// confirmer une transition : évite qu'un bruit GPS pile au seuil ne
+// génère une rafale de faux croisements très rapprochés.
+const JOIN_SPLIT_DEBOUNCE_PTS = 3;
+
+/* Grille spatiale restreinte à un sous-intervalle [lo,hi] d'un tracé —
+   variante de buildPointGrid utile ici car track1/track2 sont toujours
+   manipulés avec leurs propres bornes startIdx/endIdx. */
+function buildPointGridRange(pts, lo, hi, cellSize){
+  const grid = new Map();
+  for(let idx=lo; idx<=hi; idx++){
+    const p = pts[idx];
+    const key = Math.floor(p.lon/cellSize) + '_' + Math.floor(p.lat/cellSize);
+    if(!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(idx);
+  }
+  return grid;
 }
 
-/* Recherche de tous les croisements entre le tronçon [lo1,hi1] de pts1 et
-   le tronçon [lo2,hi2] de pts2. Un test naïf serait en O(n×m), bien trop
-   lent pour des traces de plusieurs milliers de points : on indexe donc
-   les segments de pts1 dans une grille spatiale grossière (~300 m de côté)
-   et on ne teste, pour chaque segment de pts2, que les segments de pts1
-   tombant dans les mêmes cellules. */
-function findCrossings(pts1, lo1, hi1, pts2, lo2, hi2){
-  const cellSize = 0.003; // degrés, ~300 m — assez fin pour rester sélectif,
-                           // assez large pour qu'un segment GPS tienne dans 1-4 cellules
-  const grid = {};
-  for(let i=lo1;i<hi1;i++){
-    const a = pts1[i], b = pts1[i+1];
-    const cxa = Math.floor(Math.min(a.lon,b.lon)/cellSize), cxb = Math.floor(Math.max(a.lon,b.lon)/cellSize);
-    const cya = Math.floor(Math.min(a.lat,b.lat)/cellSize), cyb = Math.floor(Math.max(a.lat,b.lat)/cellSize);
-    for(let cx=cxa; cx<=cxb; cx++){
-      for(let cy=cya; cy<=cyb; cy++){
-        const key = cx+'_'+cy;
-        (grid[key] = grid[key] || []).push(i);
-      }
-    }
+/* Pour chaque point de pts1 (sur [lo1,hi1]), calcule sa distance minimale
+   à pts2 (sur [lo2,hi2]) et détecte les transitions proche/loin autour de
+   thresholdM. Retourne un point de croisement {i1, lat, lon} par
+   transition confirmée (jonction ou séparation). */
+function findProximityCrossings(pts1, lo1, hi1, pts2, lo2, hi2, thresholdM){
+  const cellSize = 0.0015; // ~150 m — cohérent avec le reste du fichier
+  const grid2 = buildPointGridRange(pts2, lo2, hi2, cellSize);
+
+  const close = new Array(hi1 + 1);
+  for(let i=lo1; i<=hi1; i++){
+    const d = minDistanceToTrack(pts2, grid2, cellSize, pts1[i].lat, pts1[i].lon);
+    close[i] = d <= thresholdM;
   }
 
-  const results = [];
-  for(let j=lo2;j<hi2;j++){
-    const a = pts2[j], b = pts2[j+1];
-    const cxa = Math.floor(Math.min(a.lon,b.lon)/cellSize), cxb = Math.floor(Math.max(a.lon,b.lon)/cellSize);
-    const cya = Math.floor(Math.min(a.lat,b.lat)/cellSize), cyb = Math.floor(Math.max(a.lat,b.lat)/cellSize);
-    const candidates = new Set();
-    for(let cx=cxa; cx<=cxb; cx++){
-      for(let cy=cya; cy<=cyb; cy++){
-        const arr = grid[cx+'_'+cy];
-        if(arr) arr.forEach(i => candidates.add(i));
+  const transitions = [];
+  let state = close[lo1];
+  let i = lo1 + 1;
+  while(i <= hi1){
+    if(close[i] !== state){
+      let run = 1;
+      while(i + run <= hi1 && close[i + run] === close[i]) run++;
+      if(run >= JOIN_SPLIT_DEBOUNCE_PTS || i + run > hi1){
+        transitions.push(i);
+        state = close[i];
+        i += run;
+        continue;
       }
     }
-    candidates.forEach(i => {
-      const inter = segIntersect(pts1[i], pts1[i+1], a, b);
-      if(inter) results.push({i, j, lat: inter.lat, lon: inter.lon});
-    });
+    i++;
   }
-  return results;
-}
-
-/* Deux traces GPS qui se croisent "une fois" au sens humain produisent
-   souvent plusieurs hits bruts très proches (frottement quasi-tangentiel
-   sur 2-3 points). On regroupe donc les hits consécutifs (triés par indice
-   sur pts1) en un seul croisement logique. */
-function clusterCrossings(raw){
-  if(raw.length === 0) return [];
-  const sorted = raw.slice().sort((a,b) => a.i - b.i);
-  const clusters = [];
-  let current = [sorted[0]];
-  for(let k=1;k<sorted.length;k++){
-    if(sorted[k].i - current[current.length-1].i <= 4){
-      current.push(sorted[k]);
-    } else {
-      clusters.push(current);
-      current = [sorted[k]];
-    }
-  }
-  clusters.push(current);
-  return clusters.map(c => c[Math.floor(c.length/2)]);
+  return transitions.map(idx => ({i1: idx, lat: pts1[idx].lat, lon: pts1[idx].lon}));
 }
 
 /* ============================================================
@@ -487,6 +470,20 @@ const EXTERNAL_POI_SEARCH_LABELS = {
   bakery:  'boulangeries',
   toilets: 'toilettes publiques'
 };
+
+/* Ne garde, parmi `poisArr`, que les POI situés à moins de `radiusM` du
+   tracé `trackPts`. Sert à nettoyer automatiquement les POI qui se
+   retrouvaient sur une portion de tracé supprimée (ex. suppression d'un
+   segment lors d'une fusion de 2 parcours) : sans ce filtre, ils restaient
+   affichés alors qu'ils ne sont plus proches d'aucun point du tracé final. */
+const MERGE_POI_KEEP_RADIUS_M = 300;
+function filterPoisNearTrack(poisArr, trackPts, radiusM){
+  if(!poisArr || poisArr.length === 0) return [];
+  if(!trackPts || trackPts.length === 0) return [];
+  const cellSize = 0.0015;
+  const grid = buildPointGrid(trackPts, cellSize);
+  return poisArr.filter(p => minDistanceToTrack(trackPts, grid, cellSize, p.lat, p.lon) <= radiusM);
+}
 
 function joinFr(list){
   if(list.length === 0) return '';
@@ -1209,8 +1206,7 @@ function startMergeWithSecondTrack(pts2){
   const cum2 = computeCum(pts2);
   const track2 = {rawPoints: pts2, points: pts2.slice(), cum: cum2, startIdx: 0, endIdx: pts2.length - 1};
 
-  const raw = findCrossings(points, startIdx, endIdx, track2.points, track2.startIdx, track2.endIdx);
-  const clusters = clusterCrossings(raw);
+  const clusters = findProximityCrossings(points, startIdx, endIdx, track2.points, track2.startIdx, track2.endIdx, JOIN_SPLIT_THRESHOLD_M);
 
   if(clusters.length === 0){
     showMergeInfoBanner("Les 2 parcours ne se croisent pas : la fusion n'est possible qu'entre parcours qui se croisent. Le 2ᵉ tracé n'a pas été conservé.");
@@ -1246,13 +1242,11 @@ function rebuildMergeModel(){
   mergeState.hasStart2 = true; mergeState.hasEnd2 = true;
   mergeState.selectedSegId = null;
 
-  const raw = findCrossings(points, startIdx, endIdx, t2.points, t2.startIdx, t2.endIdx);
-  const clusters = clusterCrossings(raw);
+  const clusters = findProximityCrossings(points, startIdx, endIdx, t2.points, t2.startIdx, t2.endIdx, JOIN_SPLIT_THRESHOLD_M);
 
   const crossings = clusters.map((c, k) => {
-    const i1 = nearestIndexIn(points, c.lat, c.lon, startIdx, endIdx);
     const j2 = nearestIndexIn(t2.points, c.lat, c.lon, t2.startIdx, t2.endIdx);
-    return {id: 'X'+k, lat: c.lat, lon: c.lon, i1, j2};
+    return {id: 'X'+k, lat: c.lat, lon: c.lon, i1: c.i1, j2};
   });
   mergeState.crossings = crossings;
 
@@ -1368,17 +1362,64 @@ function renderMergeUI(){
   mergeState.layers = layers;
 }
 
+/* Un tronçon n'est supprimable que dans 2 cas :
+   (a) il relie 2 points de croisement ET il existe encore, sans lui, un
+       autre chemin entre ces 2 mêmes points (donc "2 parcours possibles"
+       entre les 2 croisements : le supprimer ne coupe rien) ;
+   (b) il relie un point de départ/arrivée à un point de croisement (c'est
+       une branche terminale : la retirer revient juste à ne pas retenir
+       ce départ/arrivée comme extrémité du parcours final).
+   Dans tout autre cas (ex. il s'agit du seul chemin entre 2 croisements),
+   la suppression casserait la continuité du parcours : on l'interdit. */
+function isDANode(n){ return n === 'D1' || n === 'A1' || n === 'D2' || n === 'A2'; }
+function isCrossNode(n){ return typeof n === 'string' && n.charAt(0) === 'X'; }
+
+/* Vrai s'il existe un chemin entre seg.nodeStart et seg.nodeEnd en
+   n'empruntant aucun tronçon supprimé ni `seg` lui-même (recherche en
+   largeur sur le graphe des nœuds départ/arrivée/croisements). */
+function hasAlternatePath(allSegments, seg){
+  const others = allSegments.filter(s => s.id !== seg.id && !s.deleted);
+  const adj = {};
+  others.forEach(s => {
+    (adj[s.nodeStart] = adj[s.nodeStart] || []).push(s.nodeEnd);
+    (adj[s.nodeEnd] = adj[s.nodeEnd] || []).push(s.nodeStart);
+  });
+  const visited = new Set([seg.nodeStart]);
+  const stack = [seg.nodeStart];
+  while(stack.length){
+    const n = stack.pop();
+    (adj[n] || []).forEach(n2 => { if(!visited.has(n2)){ visited.add(n2); stack.push(n2); } });
+  }
+  return visited.has(seg.nodeEnd);
+}
+
+function isSegmentDeletable(seg, allSegments){
+  const startDA = isDANode(seg.nodeStart), endDA = isDANode(seg.nodeEnd);
+  const startX = isCrossNode(seg.nodeStart), endX = isCrossNode(seg.nodeEnd);
+  if((startDA && endX) || (endDA && startX)) return true;               // cas (b)
+  if(startX && endX) return hasAlternatePath(allSegments, seg);          // cas (a)
+  return false;
+}
+
 function selectMergeSegment(segId, latlng){
   mergeState.selectedSegId = segId;
   renderMergeUI();
+  const seg = mergeState.segments.find(s => s.id === segId);
+  const deletable = !!seg && isSegmentDeletable(seg, mergeState.segments);
+  const content = deletable
+    ? '<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div><button class="seg-menu-del" id="segMenuDelBtn">🗑 Supprimer ce tronçon</button></div>'
+    : '<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div>'
+      + '<p style="font-size:.85em;color:#5a5a5a;max-width:220px;margin:.4em 0 0;">Suppression impossible : c\'est l\'unique chemin entre ces 2 points, le supprimer couperait le parcours.</p></div>';
   const popup = L.popup({closeButton:true, className:'seg-menu-popup', autoPan:true})
     .setLatLng(latlng)
-    .setContent('<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div><button class="seg-menu-del" id="segMenuDelBtn">🗑 Supprimer ce tronçon</button></div>')
+    .setContent(content)
     .openOn(map);
-  setTimeout(() => {
-    const btn = document.getElementById('segMenuDelBtn');
-    if(btn) btn.addEventListener('click', () => { map.closePopup(popup); deleteMergeSegment(segId); });
-  }, 0);
+  if(deletable){
+    setTimeout(() => {
+      const btn = document.getElementById('segMenuDelBtn');
+      if(btn) btn.addEventListener('click', () => { map.closePopup(popup); deleteMergeSegment(segId); });
+    }, 0);
+  }
   map.on('popupclose', function onClose(ev){
     if(ev.popup === popup){
       mergeState.selectedSegId = null;
@@ -1487,7 +1528,7 @@ function finalizeMerge(remaining, endNodes){
     newPoints = newPoints.concat(slice);
   });
 
-  const keepPois = pois;
+  const keepPois = filterPoisNearTrack(pois, newPoints, MERGE_POI_KEEP_RADIUS_M);
   exitMergeMode();
   loadTrack(newPoints, keepPois);
   showMergeInfoBanner('Fusion terminée : les 2 parcours ne forment plus qu\'un seul tracé, du départ à l\'arrivée.', 6000);
