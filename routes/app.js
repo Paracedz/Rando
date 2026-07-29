@@ -32,7 +32,8 @@ router.get('/app', requireAuthPage, async (req, res) => {
 
   html = html
     .replace('__USER_EMAIL__', escapeHtml(req.user.email || ''))
-    .replace('__PLAN_LABEL__', plan === 'pro' ? '★ Abonné' : 'Compte gratuit');
+    .replace('__PLAN_LABEL__', plan === 'pro' ? '★ Premium' : 'Compte gratuit')
+    .replace('__PLAN_VALUE__', plan === 'pro' ? 'pro' : 'free');
 
   res.set('Content-Type', 'text/html');
   res.send(html);
