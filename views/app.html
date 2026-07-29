@@ -13,6 +13,7 @@
   header.app-header{
     display:flex; align-items:center; gap:18px;
     padding:0 16px; background:var(--header-bg, #fff);
+    position:relative; z-index:2000; /* au-dessus de la carte Leaflet (panes/contrôles jusqu'à ~1000) */
   }
   header.app-header .brand{ display:flex; align-items:baseline; gap:8px; }
 
@@ -26,7 +27,7 @@
   .menu-trigger:hover, .menu-item.open .menu-trigger{ background:#EFEAD9; }
   .menu-caret{ font-size:10px; opacity:.7; }
   .menu-panel{
-    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:500;
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:2001;
     background:#FBF9F2; border:1px solid #D8CFB2; border-radius:10px;
     box-shadow:0 12px 30px rgba(30,40,34,.15); padding:10px; min-width:280px;
   }
