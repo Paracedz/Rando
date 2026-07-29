@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/config.js"></script>
 <link rel="stylesheet" href="/app/traceur.css" />
 <style>
   #accountBar {
@@ -223,8 +225,18 @@
 
 
 <script>
+  // Le bouton "Se déconnecter" doit détruire 2 sessions distinctes :
+  // - la session côté navigateur que supabase-js garde dans localStorage
+  //   (posée lors de la connexion sur /login.html) — sans sb.auth.signOut(),
+  //   elle restait valide et se resynchronisait automatiquement au retour
+  //   sur /login.html, donnant l'impression d'une reconnexion auto ;
+  // - le cookie httpOnly côté serveur (voir /auth/logout), qui révoque
+  //   aussi le token côté Supabase pour couper court même sans JS.
+  const sb = supabase.createClient(window.__SUPABASE_CONFIG__.url, window.__SUPABASE_CONFIG__.anonKey);
+
   document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await fetch('/auth/logout', { method: 'POST' });
+    try { await sb.auth.signOut(); } catch {}
+    await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
     window.location.href = '/login.html';
   });
 </script>

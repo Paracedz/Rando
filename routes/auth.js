@@ -8,6 +8,7 @@
 
 const express = require('express');
 const { supabaseAnon } = require('../lib/supabaseAnon');
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const { COOKIE_NAME } = require('../middleware/requireAuth');
 
 const router = express.Router();
@@ -40,7 +41,19 @@ router.post('/auth/session', express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/auth/logout', (req, res) => {
+router.post('/auth/logout', async (req, res) => {
+  const token = req.cookies ? req.cookies[COOKIE_NAME] : null;
+  if (token) {
+    // Révoque la session côté Supabase (refresh token inclus), pas
+    // seulement le cookie local : reste valable même si sb.auth.signOut()
+    // côté navigateur n'a pas pu s'exécuter (JS bloqué, autre onglet...).
+    try {
+      await supabaseAdmin.auth.admin.signOut(token, 'global');
+    } catch {
+      // Le token peut déjà être expiré/invalide : sans conséquence, on
+      // nettoie quand même le cookie ci-dessous.
+    }
+  }
   res.clearCookie(COOKIE_NAME, { path: '/' });
   res.json({ ok: true });
 });
