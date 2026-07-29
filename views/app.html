@@ -10,24 +10,68 @@
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/app/traceur.css" />
 <style>
-  #accountBar {
-    display:flex; align-items:center; gap:12px;
-    padding:6px 16px; background:#14201A; color:#C9D6C9;
+  header.app-header{
+    display:flex; align-items:center; gap:18px;
+    padding:0 16px; background:var(--header-bg, #fff);
+  }
+  header.app-header .brand{ display:flex; align-items:baseline; gap:8px; }
+
+  .main-menu{ display:flex; gap:6px; }
+  .menu-item{ position:relative; }
+  .menu-trigger{
+    background:transparent; border:1px solid transparent; cursor:pointer;
+    font:inherit; font-weight:600; font-size:13.5px; color:#2E4A38;
+    padding:8px 10px; border-radius:7px; display:flex; align-items:center; gap:4px;
+  }
+  .menu-trigger:hover, .menu-item.open .menu-trigger{ background:#EFEAD9; }
+  .menu-caret{ font-size:10px; opacity:.7; }
+  .menu-panel{
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:500;
+    background:#FBF9F2; border:1px solid #D8CFB2; border-radius:10px;
+    box-shadow:0 12px 30px rgba(30,40,34,.15); padding:10px; min-width:280px;
+  }
+  .menu-item.open .menu-panel{ display:block; }
+  .menu-block{ display:flex; flex-direction:column; gap:6px; padding:2px 4px 8px; }
+  .menu-label{ font-size:11px; font-weight:700; color:#4B5A50; text-transform:uppercase; letter-spacing:.5px; }
+  .menu-full-btn{ width:100%; }
+  .menu-sep{ height:1px; background:#E4DEC9; margin:6px 2px; }
+  .menu-action{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    width:100%; text-align:left; background:transparent; border:none; cursor:pointer;
+    font:inherit; font-size:13.5px; color:#25352B; padding:8px 8px; border-radius:6px;
+  }
+  .menu-action:hover{ background:#EFEAD9; }
+  .menu-action:disabled{ opacity:.45; cursor:not-allowed; }
+  .menu-action:disabled:hover{ background:transparent; }
+  .premium-flag{ font-size:12px; }
+
+  .account-cluster{
+    margin-left:auto; display:flex; align-items:center; gap:10px;
     font-family:'Inter',sans-serif; font-size:12px; flex-shrink:0;
   }
-  #accountBar .email { opacity:.8; flex:1; }
-  #accountBar .plan { font-weight:700; color:#D9A441; }
-  #accountBar button {
-    background:transparent; border:1px solid rgba(255,255,255,.3); color:#fff;
-    border-radius:6px; padding:4px 10px; font-size:11.5px; cursor:pointer;
+  .account-cluster .plan{ font-weight:700; color:#B5762C; white-space:nowrap; }
+  .account-cluster .plan.pro{ color:#1F7A4D; }
+  .account-cluster .email{ opacity:.75; }
+  .account-cluster button{
+    background:transparent; border:1px solid #D8CFB2; color:#2E4A38;
+    border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer;
   }
+
+  #premiumLockOverlay .modal-box{ max-width:320px; text-align:center; }
+  #premiumLockOverlay .premium-diamond{ font-size:32px; display:block; margin-bottom:8px; }
 </style>
 </head>
 <body>
-  <div id="accountBar">
-    <span class="plan">__PLAN_LABEL__</span>
-    <span class="email">__USER_EMAIL__</span>
-    <button id="logoutBtn">Se déconnecter</button>
+
+  <div class="modal-overlay" id="premiumLockOverlay">
+    <div class="modal-box">
+      <span class="premium-diamond">💎</span>
+      <h3>Fonctionnalité Premium</h3>
+      <p>Option réservée pour les membres Premiums.</p>
+      <div class="actions">
+        <button class="btn btn-outline" id="closePremiumLockBtn">Fermer</button>
+      </div>
+    </div>
   </div>
 
   <div id="poiLoadingPopin" class="poi-loading-popin" style="display:none">
@@ -37,36 +81,59 @@
     </div>
   </div>
 
-<header>
+<header class="app-header">
   <div class="brand">
     <h1>Traceur</h1>
     <span class="tagline">Prépare tes étapes</span>
   </div>
 
-  <div class="mode-switch" role="tablist">
-    <button class="mode-btn active" id="modeSimpleBtn" data-mode="simple" role="tab" aria-selected="true">Mode simple</button>
-    <button class="mode-btn" id="modeAdvancedBtn" data-mode="advanced" role="tab" aria-selected="false">Mode avancé</button>
-  </div>
+  <nav class="main-menu">
+    <div class="menu-item" id="menuParcoursItem">
+      <button type="button" class="menu-trigger" id="menuParcoursBtn" aria-haspopup="true" aria-expanded="false">Parcours <span class="menu-caret">▾</span></button>
+      <div class="menu-panel" id="menuParcoursPanel">
+        <div class="menu-block">
+          <label class="menu-label" for="baseGpxSelect">Choisir un parcours</label>
+          <select id="baseGpxSelect" disabled>
+            <option value="">Chargement du dossier base-gpx…</option>
+          </select>
+          <button class="btn btn-primary menu-full-btn" id="prepareStepsBtn" disabled>🚀 Préparer mes étapes</button>
+          <span class="base-gpx-hint" id="baseGpxHint" style="display:none"></span>
+        </div>
+        <div class="menu-sep"></div>
+        <label class="menu-action" for="fileInput" data-premium>
+          <span>⤒ Charger un GPX</span><span class="premium-flag" data-premium-flag>💎</span>
+        </label>
+        <input type="file" id="fileInput" accept=".gpx" style="display:none" />
+        <button class="menu-action" id="reverseBtn" disabled><span>⇄ Inverser le sens</span></button>
+        <button class="menu-action" id="resetBtn" disabled><span>↺ Réinitialiser</span></button>
+        <button class="menu-action" id="downloadFullTrackBtn"><span>⇩ Télécharger le parcours</span></button>
+        <button class="menu-action" id="undoBtn" disabled title="Annuler la dernière action"><span>↩ Annuler</span></button>
+        <div class="menu-sep"></div>
+        <button class="menu-action" id="saveStateBtn" disabled><span>💾 Sauvegarder l'état actuel</span></button>
+        <button class="menu-action" id="exportStateBtn" disabled><span>⇩ Exporter (.te)</span></button>
+        <label class="menu-action" for="importStateInput"><span>⇧ Importer (.te)</span></label>
+        <input type="file" id="importStateInput" accept=".te" style="display:none">
+      </div>
+    </div>
 
-  <div class="mode-controls" id="simpleModeControls">
-    <select id="baseGpxSelect" disabled>
-      <option value="">Chargement du dossier base-gpx…</option>
-    </select>
-    <button class="btn btn-primary" id="prepareStepsBtn" disabled>🚀 Préparer mes étapes</button>
-    <span class="base-gpx-hint" id="baseGpxHint" style="display:none"></span>
-  </div>
+    <div class="menu-item" id="menuAvanceItem">
+      <button type="button" class="menu-trigger" id="menuAvanceBtn" aria-haspopup="true" aria-expanded="false">Avancé <span class="menu-caret">▾</span></button>
+      <div class="menu-panel" id="menuAvancePanel">
+        <button class="menu-action" id="addGpxBtn" disabled data-premium><span>➕ Ajouter un GPX pour fusion</span><span class="premium-flag" data-premium-flag>💎</span></button>
+        <button class="menu-action" id="findPoiBtn" disabled data-premium><span>🔎 Rechercher POI</span><span class="premium-flag" data-premium-flag>💎</span></button>
+        <div id="loopActions" style="display:none">
+          <button class="menu-action" id="loopModeBtn" data-premium><span>🔗 Déplacer le point Départ/Arrivée</span><span class="premium-flag" data-premium-flag>💎</span></button>
+          <div class="help" id="loopHelp" style="display:none; padding:4px 8px;">Le parcours est une boucle : glissez le repère <b>D·A</b> à l'endroit souhaité sur le tracé pour y déplacer ensemble le départ et l'arrivée.</div>
+        </div>
+      </div>
+    </div>
+  </nav>
 
-  <div class="mode-controls" id="advancedModeControls" style="display:none">
-    <label class="btn btn-primary" for="fileInput">⤒ Charger un GPX</label>
-    <input type="file" id="fileInput" accept=".gpx" />
-    <button class="btn btn-ghost" id="addGpxBtn" disabled>➕ Ajouter un GPX</button>
-    <button class="btn btn-ghost" id="findPoiBtn" disabled>🔎 Rechercher POI</button>
+  <div class="account-cluster" id="accountCluster">
+    <span class="plan" id="accountPlanLabel">__PLAN_LABEL__</span>
+    <span class="email">__USER_EMAIL__</span>
+    <button id="logoutBtn">Se déconnecter</button>
   </div>
-
-  <div class="spacer"></div>
-  <button class="btn btn-ghost" id="undoBtn" disabled title="Annuler la dernière action">↩ Annuler</button>
-  <button class="btn btn-ghost" id="reverseBtn" disabled>⇄ Inverser le sens</button>
-  <button class="btn btn-ghost" id="resetBtn" disabled>↺ Réinitialiser</button>
 </header>
 
 <div class="modal-overlay" id="addGpxModalOverlay">
@@ -130,13 +197,6 @@
           </div>
         </div>
         <div class="help">Déplacez les repères <b>D</b> (départ, vert) et <b>A</b> (arrivée, brique) directement sur la carte pour recadrer le tracé.</div>
-        <div class="actions" id="loopActions" style="display:none">
-          <button class="btn btn-outline" id="loopModeBtn">🔗 Déplacer le point Départ/Arrivée</button>
-          <div class="help" id="loopHelp" style="display:none">Le parcours est une boucle : glissez le repère <b>D·A</b> à l'endroit souhaité sur le tracé pour y déplacer ensemble le départ et l'arrivée.</div>
-        </div>
-        <div class="actions">
-          <button class="btn btn-outline" id="downloadFullTrackBtn">⇩ Télécharger le parcours complet</button>
-        </div>
       </div>
     </div>
 
@@ -160,18 +220,10 @@
 
     <div class="card" id="saveCard">
       <h2>Sauvegardes</h2>
-      <div class="actions">
-        <button class="btn btn-outline" id="saveStateBtn" disabled>💾 Sauvegarder l'état actuel</button>
-      </div>
       <div id="saveListWrap" style="display:none">
         <div id="saveList"></div>
       </div>
-      <div class="help">Ces sauvegardes restent en mémoire le temps de la session. Exportez-les dans un fichier pour les conserver ou les reprendre plus tard.</div>
-      <div class="actions actions-row" style="margin-top:10px;">
-        <button class="btn btn-outline" id="exportStateBtn" disabled>⇩ Exporter (.te)</button>
-        <label class="btn btn-outline import-label" for="importStateInput">⇧ Importer (.te)</label>
-        <input type="file" id="importStateInput" accept=".te" style="display:none">
-      </div>
+      <div class="help">Ces sauvegardes sont liées à ton compte et conservées dans le temps, quel que soit l'appareil utilisé. Le fichier .te reste utile pour les partager ou les garder hors ligne.</div>
     </div>
 
     <div class="card" id="splitCard" style="display:none">
@@ -225,6 +277,13 @@
 
 
 <script>
+  // Statut du compte, utilisé par traceur.js pour verrouiller les options
+  // Premium (voir la logique de garde ajoutée dans traceur.js).
+  window.__RANDO_PLAN__ = '__PLAN_VALUE__';
+  if(window.__RANDO_PLAN__ === 'pro'){
+    document.getElementById('accountPlanLabel').classList.add('pro');
+  }
+
   // Le bouton "Se déconnecter" doit détruire 2 sessions distinctes :
   // - la session côté navigateur que supabase-js garde dans localStorage
   //   (posée lors de la connexion sur /login.html) — sans sb.auth.signOut(),

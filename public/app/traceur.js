@@ -676,20 +676,71 @@ document.getElementById('fileInput').addEventListener('change', e => {
 });
 
 /* ============================================================
-   MODE SIMPLE / MODE AVANCÉ
+   MENUS DU HEADER ("Parcours" / "Avancé") + VERROUILLAGE PREMIUM
    ============================================================ */
-function setMode(mode){
-  const simple = mode === 'simple';
-  document.getElementById('modeSimpleBtn').classList.toggle('active', simple);
-  document.getElementById('modeSimpleBtn').setAttribute('aria-selected', simple);
-  document.getElementById('modeAdvancedBtn').classList.toggle('active', !simple);
-  document.getElementById('modeAdvancedBtn').setAttribute('aria-selected', !simple);
-  document.getElementById('simpleModeControls').style.display = simple ? 'flex' : 'none';
-  document.getElementById('advancedModeControls').style.display = simple ? 'none' : 'flex';
-}
-document.getElementById('modeSimpleBtn').addEventListener('click', () => setMode('simple'));
-document.getElementById('modeAdvancedBtn').addEventListener('click', () => setMode('advanced'));
-setMode('simple'); // mode par défaut
+(function(){
+  const items = [
+    document.getElementById('menuParcoursItem'),
+    document.getElementById('menuAvanceItem')
+  ].filter(Boolean);
+
+  function closeAll(except){
+    items.forEach(item => {
+      if(item === except) return;
+      item.classList.remove('open');
+      const trigger = item.querySelector('.menu-trigger');
+      if(trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  items.forEach(item => {
+    const trigger = item.querySelector('.menu-trigger');
+    if(!trigger) return;
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !item.classList.contains('open');
+      closeAll();
+      item.classList.toggle('open', willOpen);
+      trigger.setAttribute('aria-expanded', String(willOpen));
+    });
+  });
+
+  // Clic en dehors, ou touche Échap : referme les menus ouverts.
+  document.addEventListener('click', () => closeAll());
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeAll(); });
+  // Un clic à l'intérieur d'un panneau ne doit pas le refermer lui-même
+  // (seul le clic sur un bouton d'action, qui déclenche sa propre logique,
+  // ou un clic hors du menu, doivent le faire).
+  items.forEach(item => {
+    const panel = item.querySelector('.menu-panel');
+    if(panel) panel.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  /* Verrouillage des options Premium : tout élément marqué [data-premium]
+     est bloqué pour un compte gratuit — un pictogramme diamant s'affiche
+     à côté, et le clic ouvre une popin plutôt que d'exécuter l'action.
+     Interception en phase de CAPTURE sur `document`, donc avant tout
+     gestionnaire de clic déjà posé directement sur le bouton/label
+     concerné (peu importe l'ordre d'enregistrement des scripts). */
+  const isPremium = window.__RANDO_PLAN__ === 'pro';
+
+  if(isPremium){
+    document.querySelectorAll('[data-premium-flag]').forEach(el => el.remove());
+  } else {
+    const overlay = document.getElementById('premiumLockOverlay');
+    document.getElementById('closePremiumLockBtn').addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+    document.addEventListener('click', function(e){
+      const locked = e.target.closest('[data-premium]');
+      if(!locked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      overlay.style.display = 'flex';
+    }, true); // phase de capture : passe avant les listeners du bouton lui-même
+  }
+})();
 
 /* Le dossier "base-gpx" est listé automatiquement au démarrage. Une page web
    ne peut pas parcourir le disque toute seule : on va donc chercher, via
