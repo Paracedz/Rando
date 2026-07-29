@@ -1549,12 +1549,30 @@ function finalizeMerge(remaining, endNodes){
   const ordered = orderMergeSegments(remaining, startNode);
   const t2 = mergeState.track2;
 
+  // Coordonnée canonique de chaque croisement : i1 (sur le tracé 1) et j2
+  // (sur le tracé 2) ne sont que les points les plus proches sur chacun des
+  // 2 tracés, pas forcément exactement la même coordonnée. Sans correction,
+  // ça laissait un petit saut dans le tracé final à chaque jonction entre
+  // 2 tronçons issus de tracés différents.
+  const crossingCoord = {};
+  mergeState.crossings.forEach(c => { crossingCoord[c.id] = {lat: c.lat, lon: c.lon}; });
+
   let newPoints = [];
   ordered.forEach(({seg, reversed}, idx) => {
     const src = seg.track === 1 ? points : t2.points;
     let slice = src.slice(seg.i0, seg.i1+1).map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
     if(reversed) slice = slice.reverse();
-    if(idx > 0) slice = slice.slice(1); // évite de dupliquer le point de jonction
+    if(idx > 0){
+      const entryNode = reversed ? seg.nodeEnd : seg.nodeStart;
+      const canon = crossingCoord[entryNode];
+      if(canon && newPoints.length > 0){
+        // Accroche le dernier point déjà ajouté (fin du tronçon précédent)
+        // exactement sur le point de croisement, pour une jonction continue.
+        const last = newPoints[newPoints.length - 1];
+        newPoints[newPoints.length - 1] = {...last, lat: canon.lat, lon: canon.lon};
+      }
+      slice = slice.slice(1); // évite de dupliquer le point de jonction
+    }
     newPoints = newPoints.concat(slice);
   });
 
