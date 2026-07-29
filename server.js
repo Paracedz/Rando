@@ -12,6 +12,7 @@ const path = require('path');
 const authRoutes = require('./routes/auth');
 const appRoutes = require('./routes/app');
 const usersRoutes = require('./routes/users');
+const savedRoutesRoutes = require('./routes/savedRoutes');
 const { getUserFromRequest } = require('./middleware/requireAuth');
 
 const app = express();
@@ -42,14 +43,18 @@ app.get('/config.js', (req, res) => {
 app.use(authRoutes);
 app.use(appRoutes);
 app.use(usersRoutes);
+app.use(savedRoutesRoutes);
 
-// Fichiers statiques (login.html, CSS/JS de Traceur sous /app/*.css|js).
-app.use(express.static(path.join(__dirname, 'public')));
-
+// GET / AVANT express.static : sinon un éventuel public/index.html serait
+// servi automatiquement en premier et empêcherait cette redirection de
+// s'exécuter (bug déjà rencontré précédemment).
 app.get('/', async (req, res) => {
   const user = await getUserFromRequest(req);
   res.redirect(user ? '/app' : '/login.html');
 });
+
+// Fichiers statiques (login.html, CSS/JS de Traceur sous /app/*.css|js).
+app.use(express.static(path.join(__dirname, 'public')));
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Rando listening on port ${port}`));

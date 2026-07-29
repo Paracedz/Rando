@@ -755,6 +755,7 @@ async function loadBaseGpxList(){
   prepareBtn.disabled = false;
 }
 loadBaseGpxList();
+fetchSavedRoutesList();
 
 document.getElementById('prepareStepsBtn').addEventListener('click', async () => {
   const idx = parseInt(document.getElementById('baseGpxSelect').value, 10);
@@ -854,9 +855,10 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 /* ============================================================
-   SAUVEGARDES (mémoire de session) + EXPORT / IMPORT FICHIER .te
+   SAUVEGARDES (persistées côté serveur, liées au compte connecté)
+   + EXPORT / IMPORT FICHIER .te
    ============================================================ */
-let savedStates = [];
+let savedRoutesCache = []; // liste légère (id, label, created_at) — reflet de /api/saved-routes
 
 function escapeHtml(str){
   const d = document.createElement('div');
@@ -879,39 +881,68 @@ function getCurrentStateObject(label){
   };
 }
 
-document.getElementById('saveStateBtn').addEventListener('click', () => {
+/* Récupère la liste des sauvegardes du compte connecté et met à jour
+   l'affichage. Appelée au chargement de la page, pour retrouver ses
+   sauvegardes d'une session à l'autre (avant, elles étaient perdues à la
+   fermeture de l'onglet). */
+async function fetchSavedRoutesList(){
+  try{
+    const res = await fetch('/api/saved-routes');
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    savedRoutesCache = data.routes || [];
+  }catch(err){
+    console.warn('Impossible de récupérer les sauvegardes :', err);
+    savedRoutesCache = [];
+  }
+  renderSaveList();
+}
+
+document.getElementById('saveStateBtn').addEventListener('click', async () => {
   if(points.length === 0) return;
-  const suggested = 'Sauvegarde ' + (savedStates.length + 1);
+  const suggested = 'Sauvegarde ' + (savedRoutesCache.length + 1);
   const label = prompt('Nom de cette sauvegarde :', suggested);
   if(label === null) return; // annulé
   const state = getCurrentStateObject(label.trim() || suggested);
-  savedStates.push({
-    id: Date.now() + '-' + Math.random().toString(36).slice(2),
-    label: state.label,
-    savedAt: state.savedAt,
-    rawPoints: rawPoints.slice(),
-    points: points.slice(),
-    startIdx, endIdx,
-    boundaries: boundaries.slice(),
-    pois: pois.slice()
-  });
-  renderSaveList();
+
+  const btn = document.getElementById('saveStateBtn');
+  btn.disabled = true;
+  try{
+    const res = await fetch('/api/saved-routes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({label: state.label, state})
+    });
+    if(!res.ok){
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Échec de la sauvegarde');
+    }
+    await fetchSavedRoutesList();
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
 });
 
 function renderSaveList(){
   const wrap = document.getElementById('saveListWrap');
   const list = document.getElementById('saveList');
-  if(savedStates.length === 0){ wrap.style.display = 'none'; return; }
+  if(savedRoutesCache.length === 0){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   list.innerHTML = '';
-  savedStates.forEach(s => {
-    const time = new Date(s.savedAt).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  savedRoutesCache.forEach(s => {
+    // Ces sauvegardes traversent maintenant plusieurs jours/sessions : on
+    // affiche la date en plus de l'heure (contrairement à l'ancien
+    // affichage "heure seule", suffisant tant que tout restait en mémoire
+    // le temps de la session).
+    const when = new Date(s.created_at).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
     const row = document.createElement('div');
     row.className = 'save-row';
     row.innerHTML = `
       <div class="save-info">
         <div class="save-label">${escapeHtml(s.label)}</div>
-        <div class="save-time">${time}</div>
+        <div class="save-time">${when}</div>
       </div>
       <div class="row-actions">
         <button class="mini-btn restore-btn" title="Reprendre cette sauvegarde" aria-label="Reprendre cette sauvegarde">↺</button>
@@ -923,23 +954,27 @@ function renderSaveList(){
   });
 }
 
-function restoreSavedState(id){
-  const s = savedStates.find(x => x.id === id);
-  if(!s) return;
-  applyState({
-    rawPoints: s.rawPoints,
-    points: s.points,
-    startIdx: s.startIdx,
-    endIdx: s.endIdx,
-    boundaries: s.boundaries,
-    pois: s.pois
-  });
-  document.getElementById('segTableWrap').style.display = boundaries.length > 2 ? 'block' : 'none';
+async function restoreSavedState(id){
+  try{
+    const res = await fetch('/api/saved-routes/' + encodeURIComponent(id));
+    if(!res.ok) throw new Error("Cette sauvegarde n'existe plus.");
+    const data = await res.json();
+    applyState(data.route.state);
+    document.getElementById('segTableWrap').style.display = boundaries.length > 2 ? 'block' : 'none';
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }
 }
 
-function deleteSavedState(id){
-  savedStates = savedStates.filter(x => x.id !== id);
-  renderSaveList();
+async function deleteSavedState(id){
+  if(!confirm('Supprimer définitivement cette sauvegarde ?')) return;
+  try{
+    const res = await fetch('/api/saved-routes/' + encodeURIComponent(id), {method: 'DELETE'});
+    if(!res.ok) throw new Error('Échec de la suppression.');
+    await fetchSavedRoutesList();
+  }catch(err){
+    alert('Erreur : ' + err.message);
+  }
 }
 
 document.getElementById('exportStateBtn').addEventListener('click', () => {
