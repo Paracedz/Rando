@@ -456,6 +456,41 @@ async function fetchOverpass(query){
   throw lastErr || new Error('Overpass indisponible');
 }
 
+/* Une seule requête Overpass avec TOUTES les ancres du corridor pouvait
+   dépasser le timeout serveur (30s) sur les longs parcours, faisant
+   échouer toute la recherche. On lotit donc les ancres par petits paquets,
+   envoyés en parallèle avec une concurrence limitée (pour rester correct
+   vis-à-vis du service public partagé), chaque paquet ayant largement le
+   temps de répondre. On n'affiche les résultats sur la carte qu'une fois
+   TOUS les lots revenus (succès ou échec). */
+const POI_BATCH_ANCHOR_COUNT = 120; // ancres par requête
+const POI_BATCH_CONCURRENCY = 3;    // requêtes Overpass simultanées max
+
+function chunkArray(arr, size){
+  const out = [];
+  for(let i=0; i<arr.length; i+=size) out.push(arr.slice(i, i+size));
+  return out;
+}
+
+/* Exécute `tasks` (fonctions renvoyant une Promise) avec au plus `limit`
+   en vol simultanément ; résout toujours (jamais de rejet global), avec un
+   résultat par tâche au format {status:'fulfilled', value} ou
+   {status:'rejected', reason}, dans l'ordre d'origine des tâches. */
+async function runWithConcurrency(tasks, limit){
+  const results = new Array(tasks.length);
+  let next = 0;
+  async function worker(){
+    while(next < tasks.length){
+      const i = next++;
+      try{ results[i] = {status: 'fulfilled', value: await tasks[i]()}; }
+      catch(err){ results[i] = {status: 'rejected', reason: err}; }
+    }
+  }
+  const workers = Array.from({length: Math.min(limit, tasks.length)}, worker);
+  await Promise.all(workers);
+  return results;
+}
+
 function classifyExternalPoi(tags){
   if(tags.amenity === 'drinking_water') return 'water';
   if(tags.shop === 'bakery') return 'bakery';
@@ -521,13 +556,21 @@ function joinFr(list){
   return list.slice(0, -1).join(', ') + ' et ' + list[list.length - 1];
 }
 
-function showPoiLoadingPopin(cats){
+function showPoiLoadingPopin(cats, batchCount){
   const labels = (cats || []).map(c => EXTERNAL_POI_SEARCH_LABELS[c]).filter(Boolean);
   const text = labels.length
     ? `Recherche des ${joinFr(labels)} à proximité du parcours…`
     : 'Recherche des points à proximité du parcours…';
   document.getElementById('poiLoadingText').textContent = text;
+  document.getElementById('poiLoadingPopin').dataset.baseText = text;
+  document.getElementById('poiLoadingPopin').dataset.batchCount = batchCount || '';
   document.getElementById('poiLoadingPopin').style.display = 'flex';
+}
+function updatePoiLoadingProgress(received, total){
+  if(!total || total <= 1) return; // pas la peine d'afficher "1/1"
+  const popin = document.getElementById('poiLoadingPopin');
+  const base = popin.dataset.baseText || '';
+  document.getElementById('poiLoadingText').textContent = `${base} (${received}/${total})`;
 }
 function hidePoiLoadingPopin(){ document.getElementById('poiLoadingPopin').style.display = 'none'; }
 
@@ -545,35 +588,64 @@ async function fetchNearbyPois(pts, cats){
   const spacing = Math.max(120, total / 900); // borne le nombre d'ancres même sur un très long tracé
   const anchors = buildCorridorAnchors(pts, spacing);
   const catFilters = cats.map(c => EXTERNAL_POI_TAG_FILTERS[c]).filter(Boolean);
-  const query = buildOverpassQuery(anchors, catFilters);
+  const batches = chunkArray(anchors, POI_BATCH_ANCHOR_COUNT);
 
-  showPoiLoadingPopin(cats);
+  showPoiLoadingPopin(cats, batches.length);
   try{
-    const data = await fetchOverpass(query);
+    let received = 0;
+    const tasks = batches.map(batch => async () => {
+      const data = await fetchOverpass(buildOverpassQuery(batch, catFilters));
+      received++;
+      if(myToken === externalPoiFetchToken) updatePoiLoadingProgress(received, batches.length);
+      return data;
+    });
+    const settled = await runWithConcurrency(tasks, POI_BATCH_CONCURRENCY);
     if(myToken !== externalPoiFetchToken) return; // un autre tracé a été chargé entretemps
+
+    const oks = settled.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if(oks.length === 0){
+      const firstErr = settled.find(r => r.status === 'rejected');
+      throw (firstErr && firstErr.reason) || new Error('Overpass indisponible');
+    }
 
     const grid = buildPointGrid(pts, 0.0015);
     const found = [];
-    (data.elements || []).forEach(el => {
-      if(el.type !== 'node' || typeof el.lat !== 'number' || typeof el.lon !== 'number') return;
-      const cat = classifyExternalPoi(el.tags || {});
-      if(!cat || !cats.includes(cat)) return;
-      const d = minDistanceToTrack(pts, grid, 0.0015, el.lat, el.lon);
-      if(d > EXTERNAL_POI_RADIUS_M) return;
-      const tags = el.tags || {};
-      const meta = POI_CAT_META[cat];
-      found.push({
-        lat: el.lat, lon: el.lon,
-        name: tags.name || meta.label,
-        type: meta.label,
-        desc: '',
-        cat,
-        source: 'api'
+    oks.forEach(data => {
+      (data.elements || []).forEach(el => {
+        if(el.type !== 'node' || typeof el.lat !== 'number' || typeof el.lon !== 'number') return;
+        const cat = classifyExternalPoi(el.tags || {});
+        if(!cat || !cats.includes(cat)) return;
+        const d = minDistanceToTrack(pts, grid, 0.0015, el.lat, el.lon);
+        if(d > EXTERNAL_POI_RADIUS_M) return;
+        const tags = el.tags || {};
+        const meta = POI_CAT_META[cat];
+        found.push({
+          lat: el.lat, lon: el.lon,
+          name: tags.name || meta.label,
+          type: meta.label,
+          desc: '',
+          cat,
+          source: 'api'
+        });
       });
     });
 
-    pois = pois.filter(p => !(p.source === 'api' && cats.includes(p.cat))).concat(found);
+    // Un même POI peut apparaître dans 2 lots voisins (zone de recouvrement
+    // du corridor entre la dernière ancre d'un lot et la première du
+    // suivant) : on déduplique avant d'afficher.
+    const seen = new Set();
+    const dedup = found.filter(p => {
+      const key = p.cat + '_' + p.lat.toFixed(5) + '_' + p.lon.toFixed(5);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    pois = pois.filter(p => !(p.source === 'api' && cats.includes(p.cat))).concat(dedup);
     renderPOIs();
+    if(oks.length < batches.length){
+      console.warn(`Recherche de POI : ${batches.length - oks.length}/${batches.length} lot(s) Overpass en échec, résultats partiels affichés.`);
+    }
   }catch(err){
     if(myToken === externalPoiFetchToken){
       console.warn("Récupération des points d'eau / boulangeries / toilettes impossible :", err);
