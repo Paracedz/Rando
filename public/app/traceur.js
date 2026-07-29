@@ -232,11 +232,17 @@ function nearestIndexIn(pts, lat, lon, lo, hi){
    Ce modèle gère correctement les portions où les 2 tracés suivent le
    même sentier sur une certaine distance (pas seulement un point unique
    d'intersection). */
-const JOIN_SPLIT_THRESHOLD_M = 30;
+const JOIN_SPLIT_THRESHOLD_M = 20;
 // Nombre de points consécutifs requis dans le nouvel état avant de
 // confirmer une transition : évite qu'un bruit GPS pile au seuil ne
 // génère une rafale de faux croisements très rapprochés.
 const JOIN_SPLIT_DEBOUNCE_PTS = 3;
+// 2 points de croisement distants de moins de CROSS_MERGE_DIST_M sont
+// fusionnés en un seul : au-delà du simple anti-rebond ci-dessus, ça évite
+// de créer plusieurs croisements quasi confondus (ex. les 2 tracés
+// oscillent brièvement autour du seuil de proximité sur une courte
+// distance) qui compliqueraient inutilement le graphe de fusion.
+const CROSS_MERGE_DIST_M = 30;
 
 /* Grille spatiale restreinte à un sous-intervalle [lo,hi] d'un tracé —
    variante de buildPointGrid utile ici car track1/track2 sont toujours
@@ -282,7 +288,31 @@ function findProximityCrossings(pts1, lo1, hi1, pts2, lo2, hi2, thresholdM){
     }
     i++;
   }
-  return transitions.map(idx => ({i1: idx, lat: pts1[idx].lat, lon: pts1[idx].lon}));
+  return clusterNearbyCrossings(
+    transitions.map(idx => ({i1: idx, lat: pts1[idx].lat, lon: pts1[idx].lon}))
+  );
+}
+
+/* Fusionne les points de croisement consécutifs (dans l'ordre du tracé)
+   distants de moins de CROSS_MERGE_DIST_M en un seul, en gardant le point
+   central de chaque groupe comme représentant — même logique que l'ancien
+   regroupement par indice, mais basée sur une vraie distance en mètres. */
+function clusterNearbyCrossings(points){
+  if(points.length === 0) return [];
+  const clusters = [];
+  let current = [points[0]];
+  for(let k=1;k<points.length;k++){
+    const prev = current[current.length-1];
+    const d = haversine(prev.lat, prev.lon, points[k].lat, points[k].lon);
+    if(d <= CROSS_MERGE_DIST_M){
+      current.push(points[k]);
+    } else {
+      clusters.push(current);
+      current = [points[k]];
+    }
+  }
+  clusters.push(current);
+  return clusters.map(c => c[Math.floor(c.length/2)]);
 }
 
 /* ============================================================
