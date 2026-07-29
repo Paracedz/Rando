@@ -56,11 +56,6 @@
       <div id="error" class="error hidden"></div>
     </div>
 
-    <div id="welcome-view" class="hidden">
-      <h1 id="welcome-title">Bienvenue !</h1>
-      <p>Nous allons pouvoir maintenant commencer.</p>
-      <button class="cta" id="start-btn">Commencer</button>
-    </div>
   </div>
 
 <script>
@@ -75,50 +70,46 @@
 
   const loadingEl = document.getElementById('loading');
   const loginView = document.getElementById('login-view');
-  const welcomeView = document.getElementById('welcome-view');
-  const welcomeTitle = document.getElementById('welcome-title');
   const errorEl = document.getElementById('error');
-
-  function firstNameFromUser(user) {
-    const meta = user.user_metadata || {};
-    const full = meta.full_name || meta.name || user.email || 'là';
-    return full.split(' ')[0];
-  }
 
   function showLogin() {
     loadingEl.classList.add('hidden');
-    welcomeView.classList.add('hidden');
     loginView.classList.remove('hidden');
-  }
-
-  function showWelcome(user) {
-    loadingEl.classList.add('hidden');
-    loginView.classList.add('hidden');
-    welcomeTitle.textContent = `Bienvenue ${firstNameFromUser(user)}`;
-    welcomeView.classList.remove('hidden');
   }
 
   // Synchronise la session supabase-js (côté client) avec un cookie
   // httpOnly côté serveur, seul élément que nos routes protégées vérifient.
+  // Ne redirige vers /app qu'une fois cette synchro confirmée : sinon le
+  // middleware serveur renverrait immédiatement l'utilisateur ici.
   async function syncServerSession(session) {
-    if (!session) return;
+    if (!session) return false;
     try {
-      await fetch('/auth/session', {
+      const res = await fetch('/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ access_token: session.access_token }),
       });
+      return res.ok;
     } catch {
-      // Si la synchro échoue, l'utilisateur restera bloqué par le
-      // middleware serveur et sera renvoyé vers /login.html : sûr par défaut.
+      return false;
+    }
+  }
+
+  async function goToApp(session) {
+    const ok = await syncServerSession(session);
+    if (ok) {
+      window.location.href = '/app';
+    } else {
+      errorEl.textContent = "Impossible d'établir la session. Réessaie.";
+      errorEl.classList.remove('hidden');
+      showLogin();
     }
   }
 
   async function init() {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
-      await syncServerSession(session);
-      showWelcome(session.user);
+      goToApp(session);
     } else {
       showLogin();
     }
@@ -126,8 +117,7 @@
 
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session) {
-      await syncServerSession(session);
-      showWelcome(session.user);
+      goToApp(session);
     } else {
       await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
       showLogin();
@@ -140,10 +130,6 @@
 
   document.getElementById('facebook-btn').addEventListener('click', () => {
     sb.auth.signInWithOAuth({ provider: 'facebook', options: { redirectTo: window.location.origin + '/login.html' } });
-  });
-
-  document.getElementById('start-btn').addEventListener('click', () => {
-    window.location.href = '/app';
   });
 
   init();
