@@ -12,7 +12,7 @@
 <style>
   header.app-header{
     display:flex; align-items:center; gap:18px;
-    padding:0 16px; background:var(--header-bg, #fff);
+    padding:0 16px; background:#10140F; /* très sombre, quasi noir */
     position:relative; z-index:2000; /* au-dessus de la carte Leaflet (panes/contrôles jusqu'à ~1000) */
   }
   header.app-header .brand{ display:flex; align-items:baseline; gap:8px; }
@@ -21,12 +21,13 @@
   .menu-item{ position:relative; }
   .menu-trigger{
     background:transparent; border:1px solid transparent; cursor:pointer;
-    font:inherit; font-weight:600; font-size:13.5px; color:#2E4A38;
+    font:inherit; font-weight:600; font-size:13.5px; color:#F1ECDD;
     padding:8px 10px; border-radius:7px; display:flex; align-items:center; gap:4px;
   }
-  .menu-trigger:hover, .menu-item.open .menu-trigger{ background:#EFEAD9; }
+  .menu-trigger:hover, .menu-item.open .menu-trigger{ background:#EFEAD9; color:#1F3527; }
   .menu-caret{ font-size:10px; opacity:.7; }
   .menu-panel{
+    /* Le panneau déroulant reste sur fond clair, indépendamment du header */
     display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:2001;
     background:#FBF9F2; border:1px solid #D8CFB2; border-radius:10px;
     box-shadow:0 12px 30px rgba(30,40,34,.15); padding:10px; min-width:280px;
@@ -50,13 +51,14 @@
     margin-left:auto; display:flex; align-items:center; gap:10px;
     font-family:'Inter',sans-serif; font-size:12px; flex-shrink:0;
   }
-  .account-cluster .plan{ font-weight:700; color:#B5762C; white-space:nowrap; }
-  .account-cluster .plan.pro{ color:#1F7A4D; }
-  .account-cluster .email{ opacity:.75; }
+  .account-cluster .plan{ font-weight:700; color:#D9A441; white-space:nowrap; }
+  .account-cluster .plan.pro{ color:#D9A441; }
+  .account-cluster .email{ color:#C9D6C9; opacity:.85; }
   .account-cluster button{
-    background:transparent; border:1px solid #D8CFB2; color:#2E4A38;
+    background:transparent; border:1px solid rgba(255,255,255,.35); color:#F1ECDD;
     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer;
   }
+  .account-cluster button:hover{ border-color:#fff; }
 
   #premiumLockOverlay .modal-box{ max-width:320px; text-align:center; }
   #premiumLockOverlay .premium-diamond{ font-size:32px; display:block; margin-bottom:8px; }
