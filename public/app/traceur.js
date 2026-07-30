@@ -705,6 +705,28 @@ document.getElementById('fileInput').addEventListener('change', e => {
     });
   });
 
+  // Ouverture au survol (souris) : pas besoin de cliquer sur l'entête.
+  // Un petit délai à la fermeture évite que le menu ne se referme quand
+  // la souris traverse le petit espace vide entre l'entête et le panneau.
+  let hoverCloseTimer = null;
+  items.forEach(item => {
+    const trigger = item.querySelector('.menu-trigger');
+    if(!trigger) return;
+    item.addEventListener('mouseenter', () => {
+      clearTimeout(hoverCloseTimer);
+      closeAll(item);
+      item.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+    });
+    item.addEventListener('mouseleave', () => {
+      clearTimeout(hoverCloseTimer);
+      hoverCloseTimer = setTimeout(() => {
+        item.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+      }, 200);
+    });
+  });
+
   // Clic en dehors, ou touche Échap : referme les menus ouverts.
   document.addEventListener('click', () => closeAll());
   document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeAll(); });
