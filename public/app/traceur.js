@@ -709,11 +709,20 @@ document.getElementById('fileInput').addEventListener('change', e => {
   document.addEventListener('click', () => closeAll());
   document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeAll(); });
   // Un clic à l'intérieur d'un panneau ne doit pas le refermer lui-même
-  // (seul le clic sur un bouton d'action, qui déclenche sa propre logique,
-  // ou un clic hors du menu, doivent le faire).
+  // via le listener document ci-dessous (sinon impossible d'interagir
+  // avec le <select>) — mais un clic sur une vraie action (bouton/label,
+  // ex. "Charger un GPX", "Inverser le sens"...) doit bien refermer le
+  // menu une fois l'action déclenchée.
   items.forEach(item => {
     const panel = item.querySelector('.menu-panel');
-    if(panel) panel.addEventListener('click', (e) => e.stopPropagation());
+    if(!panel) return;
+    panel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const actionEl = e.target.closest('button, label');
+      if(actionEl && panel.contains(actionEl)){
+        setTimeout(() => closeAll(), 0);
+      }
+    });
   });
 
   /* Verrouillage des options Premium : tout élément marqué [data-premium]
@@ -831,13 +840,12 @@ function enableUIAfterLoad(){
   document.getElementById('mapEmpty').style.display = 'none';
   document.getElementById('segCount').max = Math.max(2, Math.min(20, Math.floor(points.length/2)));
   document.getElementById('saveStateBtn').disabled = false;
-  document.getElementById('exportStateBtn').disabled = false;
   document.getElementById('addGpxBtn').disabled = false;
   document.getElementById('findPoiBtn').disabled = false;
 }
 
-/* Applique un état complet (import GPX initial, reprise d'une sauvegarde
-   mémoire, ou import d'un fichier .te) : recalcule tout et met à jour l'UI. */
+/* Applique un état complet (import GPX initial ou reprise d'une sauvegarde
+   liée au compte) : recalcule tout et met à jour l'UI. */
 function applyState(state){
   if(mergeState) exitMergeMode();
   pushUndo();
@@ -907,7 +915,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 
 /* ============================================================
    SAUVEGARDES (persistées côté serveur, liées au compte connecté)
-   + EXPORT / IMPORT FICHIER .te
    ============================================================ */
 let savedRoutesCache = []; // liste légère (id, label, created_at) — reflet de /api/saved-routes
 
@@ -1028,42 +1035,6 @@ async function deleteSavedState(id){
   }
 }
 
-document.getElementById('exportStateBtn').addEventListener('click', () => {
-  if(points.length === 0) return;
-  const state = getCurrentStateObject(null);
-  const jsonStr = JSON.stringify(state);
-  const blob = new Blob([jsonStr], {type:'application/octet-stream'});
-  const url = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().slice(0,16).replace('T','-').replace(':','h');
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `traceur-${stamp}.te`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
-
-document.getElementById('importStateInput').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = evt => {
-    try{
-      const state = JSON.parse(evt.target.result);
-      if(state.format !== 'traceur-etat' || !Array.isArray(state.rawPoints) || !Array.isArray(state.points)
-         || !Array.isArray(state.boundaries) || typeof state.startIdx !== 'number' || typeof state.endIdx !== 'number'){
-        throw new Error("Ce fichier .te n'est pas reconnu ou est corrompu.");
-      }
-      applyState(state);
-      document.getElementById('segTableWrap').style.display = boundaries.length > 2 ? 'block' : 'none';
-    }catch(err){
-      alert('Erreur : ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
-});
 
 document.getElementById('splitBtn').addEventListener('click', () => {
   const n = parseInt(document.getElementById('segCount').value, 10);
@@ -1775,17 +1746,14 @@ function exitMergeMode(){
 }
 
 function setMergeControlsDisabled(disabled){
-  ['reverseBtn','resetBtn','saveStateBtn','exportStateBtn','prepareStepsBtn','baseGpxSelect','splitBtn','segCount'].forEach(id => {
+  ['reverseBtn','resetBtn','saveStateBtn','prepareStepsBtn','baseGpxSelect','splitBtn','segCount'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.disabled = disabled;
   });
   document.getElementById('addGpxBtn').disabled = disabled || points.length === 0;
   document.getElementById('findPoiBtn').disabled = disabled || points.length === 0;
-  document.getElementById('importStateInput').disabled = disabled;
   const fileLabel = document.querySelector('label[for="fileInput"]');
   if(fileLabel) fileLabel.classList.toggle('btn-disabled-look', disabled);
-  const importLabel = document.querySelector('label[for="importStateInput"]');
-  if(importLabel) importLabel.classList.toggle('btn-disabled-look', disabled);
 }
 
 document.getElementById('cancelMergeBtn').addEventListener('click', () => {
