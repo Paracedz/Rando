@@ -1570,10 +1570,30 @@ function hasAlternatePath(allSegments, seg){
   return visited.has(seg.nodeEnd);
 }
 
+/* Nombre de nœuds départ/arrivée (D1/A1/D2/A2) encore "connectés" — c'est-
+   à-dire touchés par au moins un tronçon non supprimé — en excluant
+   éventuellement un tronçon donné (pour évaluer une suppression avant de
+   la faire). Un nœud D/A n'est par construction touché que par un seul
+   tronçon (c'est une extrémité), donc le retirer fait toujours disparaître
+   ce nœud du décompte. */
+function countConnectedDANodes(allSegments, excludeSegId){
+  const present = new Set();
+  allSegments.forEach(s => {
+    if(s.deleted || s.id === excludeSegId) return;
+    if(isDANode(s.nodeStart)) present.add(s.nodeStart);
+    if(isDANode(s.nodeEnd)) present.add(s.nodeEnd);
+  });
+  return present.size;
+}
+
 function isSegmentDeletable(seg, allSegments){
   const startDA = isDANode(seg.nodeStart), endDA = isDANode(seg.nodeEnd);
   const startX = isCrossNode(seg.nodeStart), endX = isCrossNode(seg.nodeEnd);
-  if((startDA && endX) || (endDA && startX)) return true;               // cas (b)
+  if((startDA && endX) || (endDA && startX)){
+    // cas (b) : il doit toujours rester au moins 2 points départ/arrivée
+    // possibles (un départ + une arrivée, ou 2 départs, ou 2 arrivées).
+    return countConnectedDANodes(allSegments, seg.id) >= 2;
+  }
   if(startX && endX) return hasAlternatePath(allSegments, seg);          // cas (a)
   return false;
 }
@@ -1583,10 +1603,17 @@ function selectMergeSegment(segId, latlng){
   renderMergeUI();
   const seg = mergeState.segments.find(s => s.id === segId);
   const deletable = !!seg && isSegmentDeletable(seg, mergeState.segments);
+  let reason = '';
+  if(seg && !deletable){
+    const startDA = isDANode(seg.nodeStart), endDA = isDANode(seg.nodeEnd);
+    reason = (startDA || endDA)
+      ? "il doit toujours rester au moins 2 points de départ/arrivée possibles."
+      : "c'est l'unique chemin entre ces 2 points, le supprimer couperait le parcours.";
+  }
   const content = deletable
     ? '<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div><button class="seg-menu-del" id="segMenuDelBtn">🗑 Supprimer ce tronçon</button></div>'
     : '<div class="seg-menu"><div class="seg-menu-title">Tronçon sélectionné</div>'
-      + '<p style="font-size:.85em;color:#5a5a5a;max-width:220px;margin:.4em 0 0;">Suppression impossible : c\'est l\'unique chemin entre ces 2 points, le supprimer couperait le parcours.</p></div>';
+      + `<p style="font-size:.85em;color:#5a5a5a;max-width:220px;margin:.4em 0 0;">Suppression impossible : ${reason}</p></div>`;
   const popup = L.popup({closeButton:true, className:'seg-menu-popup', autoPan:true})
     .setLatLng(latlng)
     .setContent(content)
