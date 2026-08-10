@@ -62,6 +62,17 @@
 
   #premiumLockOverlay .modal-box{ max-width:320px; text-align:center; }
   #premiumLockOverlay .premium-diamond{ font-size:32px; display:block; margin-bottom:8px; }
+
+  #shareRouteOverlay .modal-box{ max-width:360px; }
+  #shareRouteOverlay label{ display:block; font-size:12px; font-weight:700; color:#4B5A50; margin:10px 0 4px; }
+  #shareRouteOverlay input, #shareRouteOverlay textarea{
+    width:100%; box-sizing:border-box; padding:8px 10px; border:1.5px solid #D8CFB2;
+    border-radius:7px; font:inherit; font-size:13.5px;
+  }
+  #shareRouteOverlay textarea{ resize:vertical; min-height:60px; }
+  #shareStatusMsg{ font-size:12px; margin-top:10px; display:none; }
+  #shareStatusMsg.ok{ color:#1F7A4D; }
+  #shareStatusMsg.err{ color:#A5432E; }
 </style>
 </head>
 <body>
@@ -73,6 +84,22 @@
       <p>Option réservée pour les membres Premiums.</p>
       <div class="actions">
         <button class="btn btn-outline" id="closePremiumLockBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="shareRouteOverlay">
+    <div class="modal-box">
+      <h3>Partager cette sauvegarde</h3>
+      <p>Envoie une copie de cette sauvegarde à un ami par email.</p>
+      <label for="shareEmailInput">Email de ton ami</label>
+      <input type="email" id="shareEmailInput" placeholder="ami@exemple.com" />
+      <label for="shareMessageInput">Message personnel (optionnel)</label>
+      <textarea id="shareMessageInput" maxlength="500" placeholder="Un petit mot pour accompagner l'envoi…"></textarea>
+      <div id="shareStatusMsg"></div>
+      <div class="actions" style="margin-top:14px;">
+        <button class="btn btn-primary" id="shareConfirmBtn">Envoyer</button>
+        <button class="btn btn-outline" id="shareCancelBtn">Annuler</button>
       </div>
     </div>
   </div>

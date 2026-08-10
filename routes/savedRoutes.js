@@ -12,8 +12,11 @@
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuthApi, COOKIE_NAME } = require('../middleware/requireAuth');
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
+const { sendEmail } = require('../lib/email');
 
 const router = express.Router();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function supabaseAsUser(token) {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
@@ -69,6 +72,83 @@ router.delete('/api/saved-routes/:id', requireAuthApi, async (req, res) => {
   const { error } = await sb.from('saved_routes').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
+});
+
+// Partage d'une sauvegarde avec un ami par email :
+// 1) copie la sauvegarde (nouvelle ligne, propre id) ;
+// 2) crée le compte de l'ami s'il n'existe pas déjà ;
+// 3) rattache la copie au compte de l'ami ;
+// 4) envoie un email (contenu différent selon compte existant/nouveau,
+//    avec le message personnel inséré si fourni).
+router.post('/api/saved-routes/:id/share', express.json(), requireAuthApi, async (req, res) => {
+  const friendEmail = String(req.body?.email || '').trim().toLowerCase();
+  const personalMessage = String(req.body?.message || '').trim().slice(0, 500);
+
+  if (!EMAIL_RE.test(friendEmail)) {
+    return res.status(400).json({ error: 'Adresse email invalide' });
+  }
+  const senderEmail = req.user.email || '';
+  if (friendEmail === senderEmail.toLowerCase()) {
+    return res.status(400).json({ error: 'Tu ne peux pas te partager une sauvegarde à toi-même' });
+  }
+
+  // 1) Récupère la sauvegarde à partager (RLS garantit qu'elle t'appartient).
+  const sbUser = supabaseAsUser(req.cookies[COOKIE_NAME]);
+  const { data: route, error: routeErr } = await sbUser
+    .from('saved_routes')
+    .select('label, state')
+    .eq('id', req.params.id)
+    .single();
+  if (routeErr || !route) return res.status(404).json({ error: 'Sauvegarde introuvable' });
+
+  // 2) Le compte de l'ami existe-t-il déjà ? (recherche via service_role,
+  // nécessaire puisque RLS empêcherait normalement de voir la ligne d'un
+  // autre utilisateur).
+  const { data: existingUser } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('email', friendEmail)
+    .maybeSingle();
+
+  let friendId = existingUser?.id;
+  let isNewAccount = false;
+
+  if (!friendId) {
+    // 3) Sinon, création du compte — la ligne public.users correspondante
+    // est provisionnée automatiquement par le trigger on_auth_user_created
+    // (voir supabase/schema.sql). L'ami se connectera ensuite normalement
+    // via Google/Facebook avec cette même adresse email.
+    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: friendEmail,
+      email_confirm: true,
+    });
+    if (createErr) return res.status(500).json({ error: createErr.message });
+    friendId = created.user.id;
+    isNewAccount = true;
+  }
+
+  // 4) Copie de la sauvegarde, rattachée au compte de l'ami.
+  const { error: insertErr } = await supabaseAdmin
+    .from('saved_routes')
+    .insert({ user_id: friendId, label: route.label, state: route.state });
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  // 5) Email — 2 formulations selon compte existant/nouveau, message
+  // personnel inséré uniquement s'il a été renseigné.
+  const messageBlock = personalMessage ? ` Voici son message : ${personalMessage}.` : '';
+  const text = isNewAccount
+    ? `Bonjour, votre ami ${senderEmail} vient de vous partager une proposition de parcours sur Traceur.${messageBlock} Vous pouvez facilement vous créer un compte afin de pouvoir voir cette proposition. Bonne journée. Traceur Team`
+    : `Bonjour, votre ami ${senderEmail} vient de vous partager une proposition de parcours sur Traceur.${messageBlock} Connectez-vous afin de pouvoir voir cette proposition. Bonne journée. Traceur Team`;
+
+  try {
+    await sendEmail({ to: friendEmail, subject: 'Un parcours partagé sur Traceur', text });
+  } catch (err) {
+    // La copie a bien été créée même si l'envoi de l'email échoue : on le
+    // signale sans annuler le partage.
+    return res.json({ ok: true, emailSent: false, warning: err.message });
+  }
+
+  res.json({ ok: true, emailSent: true, newAccount: isNewAccount });
 });
 
 module.exports = router;

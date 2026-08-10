@@ -1025,14 +1025,81 @@ function renderSaveList(){
         <div class="save-time">${when}</div>
       </div>
       <div class="row-actions">
+        <button class="mini-btn share-btn" title="Partager avec un ami" aria-label="Partager avec un ami">📤</button>
         <button class="mini-btn restore-btn" title="Reprendre cette sauvegarde" aria-label="Reprendre cette sauvegarde">↺</button>
         <button class="del-btn" title="Supprimer cette sauvegarde" aria-label="Supprimer cette sauvegarde">${DEL_ICON}</button>
       </div>`;
+    row.querySelector('.share-btn').addEventListener('click', () => openShareModal(s.id));
     row.querySelector('.restore-btn').addEventListener('click', () => restoreSavedState(s.id));
     row.querySelector('.del-btn').addEventListener('click', () => deleteSavedState(s.id));
     list.appendChild(row);
   });
 }
+
+/* ============================================================
+   PARTAGE D'UNE SAUVEGARDE PAR EMAIL
+   ============================================================ */
+let shareTargetId = null;
+
+function openShareModal(id){
+  shareTargetId = id;
+  document.getElementById('shareEmailInput').value = '';
+  document.getElementById('shareMessageInput').value = '';
+  const statusEl = document.getElementById('shareStatusMsg');
+  statusEl.style.display = 'none';
+  statusEl.className = '';
+  document.getElementById('shareRouteOverlay').style.display = 'flex';
+}
+
+document.getElementById('shareCancelBtn').addEventListener('click', () => {
+  document.getElementById('shareRouteOverlay').style.display = 'none';
+});
+
+document.getElementById('shareConfirmBtn').addEventListener('click', async () => {
+  const email = document.getElementById('shareEmailInput').value.trim();
+  const message = document.getElementById('shareMessageInput').value.trim();
+  const statusEl = document.getElementById('shareStatusMsg');
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  if(!emailOk){
+    statusEl.textContent = 'Adresse email invalide.';
+    statusEl.className = 'err';
+    statusEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('shareConfirmBtn');
+  btn.disabled = true;
+  statusEl.style.display = 'none';
+  try{
+    const res = await fetch(`/api/saved-routes/${encodeURIComponent(shareTargetId)}/share`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, message})
+    });
+    const body = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(body.error || 'Échec du partage');
+
+    if(body.emailSent === false){
+      statusEl.textContent = "Sauvegarde copiée pour ton ami, mais l'email n'a pas pu être envoyé (" + (body.warning || 'erreur inconnue') + ').';
+      statusEl.className = 'err';
+      statusEl.style.display = 'block';
+    } else {
+      statusEl.textContent = body.newAccount
+        ? 'Partagé ! Un compte a été créé pour ton ami, qui a reçu un email.'
+        : 'Partagé ! Ton ami a reçu un email.';
+      statusEl.className = 'ok';
+      statusEl.style.display = 'block';
+      setTimeout(() => { document.getElementById('shareRouteOverlay').style.display = 'none'; }, 2200);
+    }
+  }catch(err){
+    statusEl.textContent = 'Erreur : ' + err.message;
+    statusEl.className = 'err';
+    statusEl.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+  }
+});
 
 async function restoreSavedState(id){
   try{
