@@ -14,6 +14,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { requireAuthApi, COOKIE_NAME } = require('../middleware/requireAuth');
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const { sendEmail } = require('../lib/email');
+const { shareRouteEmail } = require('../lib/emailTemplates');
 
 const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,15 +134,19 @@ router.post('/api/saved-routes/:id/share', express.json(), requireAuthApi, async
     .insert({ user_id: friendId, label: route.label, state: route.state });
   if (insertErr) return res.status(500).json({ error: insertErr.message });
 
-  // 5) Email — 2 formulations selon compte existant/nouveau, message
-  // personnel inséré uniquement s'il a été renseigné.
-  const messageBlock = personalMessage ? ` Voici son message : ${personalMessage}.` : '';
-  const text = isNewAccount
-    ? `Bonjour, votre ami ${senderEmail} vient de vous partager une proposition de parcours sur Traceur.${messageBlock} Vous pouvez facilement vous créer un compte afin de pouvoir voir cette proposition. Bonne journée. Traceur Team`
-    : `Bonjour, votre ami ${senderEmail} vient de vous partager une proposition de parcours sur Traceur.${messageBlock} Connectez-vous afin de pouvoir voir cette proposition. Bonne journée. Traceur Team`;
+  // 5) Email — gabarit HTML aux couleurs de l'appli (+ version texte),
+  // 2 formulations selon compte existant/nouveau, message personnel inséré
+  // uniquement s'il a été renseigné.
+  const appUrl = `${req.protocol}://${req.get('host')}/login.html`;
+  const { text, html } = shareRouteEmail({
+    senderEmail,
+    personalMessage,
+    isNewAccount,
+    appUrl,
+  });
 
   try {
-    await sendEmail({ to: friendEmail, subject: 'Un parcours partagé sur Traceur', text });
+    await sendEmail({ to: friendEmail, subject: 'Un parcours partagé sur Traceur', text, html });
   } catch (err) {
     // La copie a bien été créée même si l'envoi de l'email échoue : on le
     // signale sans annuler le partage.
