@@ -53,7 +53,21 @@
   }
   .account-cluster .plan{ font-weight:700; color:#D9A441; white-space:nowrap; }
   .account-cluster .plan.pro{ color:#D9A441; }
-  .account-cluster .email{ color:#C9D6C9; opacity:.85; }
+  .account-cluster .name{
+    position:relative; color:#F1ECDD; font-weight:600; cursor:default;
+    padding:2px 2px; border-radius:4px;
+  }
+  .account-cluster .name:hover, .account-cluster .name:focus{ outline:none; background:rgba(255,255,255,.08); }
+  .account-tooltip{
+    display:none; position:absolute; top:calc(100% + 8px); right:0; z-index:2002;
+    background:#FBF9F2; color:#25352B; border:1px solid #D8CFB2; border-radius:8px;
+    padding:10px 13px; font-size:12px; line-height:1.6; white-space:nowrap;
+    box-shadow:0 12px 30px rgba(30,40,34,.18);
+  }
+  .account-tooltip .tt-name{ font-weight:700; color:#1F3527; }
+  .account-tooltip .tt-email{ color:#4B5A50; }
+  .account-cluster .name:hover .account-tooltip,
+  .account-cluster .name:focus .account-tooltip{ display:block; }
   .account-cluster button{
     background:transparent; border:1px solid rgba(255,255,255,.35); color:#F1ECDD;
     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer;
@@ -158,7 +172,13 @@
 
   <div class="account-cluster" id="accountCluster">
     <span class="plan" id="accountPlanLabel">__PLAN_LABEL__</span>
-    <span class="email">__USER_EMAIL__</span>
+    <span class="name" tabindex="0" aria-describedby="accountTooltip">
+      __USER_GIVEN_NAME__
+      <span class="account-tooltip" id="accountTooltip">
+        <span class="tt-name">__USER_FULL_NAME__</span><br>
+        <span class="tt-email">__USER_EMAIL__</span>
+      </span>
+    </span>
     <button id="logoutBtn">Se déconnecter</button>
   </div>
 </header>
