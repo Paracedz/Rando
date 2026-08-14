@@ -865,6 +865,8 @@ function enableUIAfterLoad(){
   document.getElementById('saveStateBtn').disabled = false;
   document.getElementById('addGpxBtn').disabled = false;
   document.getElementById('findPoiBtn').disabled = false;
+  // Le profil altimétrique n'a de sens qu'une fois un tracé chargé.
+  document.getElementById('elevWrap').style.display = '';
 }
 
 /* Applique un état complet (import GPX initial ou reprise d'une sauvegarde

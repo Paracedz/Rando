@@ -154,6 +154,7 @@ main{
 }
 #map{position:absolute; inset:0; height:100%; width:100%;}
 #elevWrap{
+  display:none; /* masqué tant qu'aucun tracé n'est chargé (voir enableUIAfterLoad) */
   height:150px;
   background:var(--white);
   border-top:1px solid var(--line);
