@@ -53,26 +53,12 @@
   }
   .account-cluster .plan{ font-weight:700; color:#D9A441; white-space:nowrap; }
   .account-cluster .plan.pro{ color:#D9A441; }
-  .account-cluster .name{
-    position:relative; color:#F1ECDD; font-weight:600; cursor:default;
-    padding:2px 2px; border-radius:4px;
-  }
-  .account-cluster .name:hover, .account-cluster .name:focus{ outline:none; background:rgba(255,255,255,.08); }
-  .account-tooltip{
-    display:none; position:absolute; top:calc(100% + 8px); right:0; z-index:2002;
-    background:#FBF9F2; color:#25352B; border:1px solid #D8CFB2; border-radius:8px;
-    padding:10px 13px; font-size:12px; line-height:1.6; white-space:nowrap;
-    box-shadow:0 12px 30px rgba(30,40,34,.18);
-  }
-  .account-tooltip .tt-name{ font-weight:700; color:#1F3527; }
-  .account-tooltip .tt-email{ color:#4B5A50; }
-  .account-cluster .name:hover .account-tooltip,
-  .account-cluster .name:focus .account-tooltip{ display:block; }
-  .account-cluster button{
-    background:transparent; border:1px solid rgba(255,255,255,.35); color:#F1ECDD;
-    border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer;
-  }
-  .account-cluster button:hover{ border-color:#fff; }
+  /* Le déclencheur du menu "compte" réutilise .menu-trigger tel quel :
+     même couleur de fond au survol que les menus Parcours/Avancé. */
+  #menuAccountItem .menu-trigger{ font-size:13px; }
+  .menu-panel-right{ left:auto; right:0; }
+  .account-panel-name{ display:block; font-weight:700; color:#1F3527; font-size:13.5px; }
+  .account-panel-email{ display:block; color:#4B5A50; font-size:12px; margin-top:2px; }
 
   #premiumLockOverlay .modal-box{ max-width:320px; text-align:center; }
   #premiumLockOverlay .premium-diamond{ font-size:32px; display:block; margin-bottom:8px; }
@@ -172,14 +158,17 @@
 
   <div class="account-cluster" id="accountCluster">
     <span class="plan" id="accountPlanLabel">__PLAN_LABEL__</span>
-    <span class="name" tabindex="0" aria-describedby="accountTooltip">
-      __USER_GIVEN_NAME__
-      <span class="account-tooltip" id="accountTooltip">
-        <span class="tt-name">__USER_FULL_NAME__</span><br>
-        <span class="tt-email">__USER_EMAIL__</span>
-      </span>
-    </span>
-    <button id="logoutBtn">Se déconnecter</button>
+    <div class="menu-item" id="menuAccountItem">
+      <button type="button" class="menu-trigger" id="menuAccountBtn" aria-haspopup="true" aria-expanded="false">__USER_GIVEN_NAME__ <span class="menu-caret">▾</span></button>
+      <div class="menu-panel menu-panel-right" id="menuAccountPanel">
+        <div class="menu-block" style="padding-bottom:8px;">
+          <span class="account-panel-name">__USER_FULL_NAME__</span>
+          <span class="account-panel-email">__USER_EMAIL__</span>
+        </div>
+        <div class="menu-sep"></div>
+        <button class="menu-action" id="logoutBtn"><span>🚪 Se déconnecter</span></button>
+      </div>
+    </div>
   </div>
 </header>
 

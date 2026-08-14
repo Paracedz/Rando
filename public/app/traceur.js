@@ -681,7 +681,8 @@ document.getElementById('fileInput').addEventListener('change', e => {
 (function(){
   const items = [
     document.getElementById('menuParcoursItem'),
-    document.getElementById('menuAvanceItem')
+    document.getElementById('menuAvanceItem'),
+    document.getElementById('menuAccountItem')
   ].filter(Boolean);
 
   function closeAll(except){
