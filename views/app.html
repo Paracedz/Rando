@@ -296,7 +296,9 @@
         </div>
       </div>
     </div>
-    <div id="elevWrap">
+    <div id="elevWrap" style="display:none">
+      <!-- masqué tant qu'aucun tracé n'est chargé : enableUIAfterLoad() dans
+           traceur.js remet style.display à '' (donc le CSS reprend la main). -->
       <div class="elev-header">
         <span class="elev-title">Profil d'altitude</span>
         <span class="elev-hover-info" id="elevHoverInfo"></span>
