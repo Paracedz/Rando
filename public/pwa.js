@@ -36,6 +36,28 @@
     return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
   }
 
+  // Détecte le type d'appareil pour adapter le message de la bannière
+  // (le texte "sur ton téléphone" n'a pas de sens si beforeinstallprompt
+  // se déclenche depuis Chrome/Edge sur un PC, par exemple).
+  function detectPlatform() {
+    const ua = window.navigator.userAgent || '';
+    const isTouchMac = /macintosh|mac os x/i.test(ua) && navigator.maxTouchPoints > 1; // iPad en mode "Mac"
+    if (isIos() || isTouchMac) return 'ios';
+    if (/android/i.test(ua)) return 'android';
+    if (/windows/i.test(ua)) return 'windows';
+    if (/macintosh|mac os x/i.test(ua)) return 'mac';
+    if (/linux/i.test(ua)) return 'linux';
+    return 'other';
+  }
+
+  const INSTALL_MESSAGES = {
+    android: "Installe Traceur sur ton téléphone pour l'ouvrir directement depuis l'écran d'accueil.",
+    windows: "Installe Traceur sur cet ordinateur pour l'ouvrir directement depuis le menu Démarrer ou le bureau.",
+    mac: "Installe Traceur sur ce Mac pour l'ouvrir directement depuis le Dock ou Launchpad.",
+    linux: "Installe Traceur sur cet ordinateur pour l'ouvrir directement comme une application.",
+    other: "Installe Traceur pour l'ouvrir directement depuis cet appareil.",
+  };
+
   function buildBanner({ text, buttonLabel, onAccept }) {
     const bar = document.createElement('div');
     bar.setAttribute('role', 'dialog');
@@ -84,11 +106,12 @@
 
   if (isStandalone() || wasRecentlyDismissed()) return;
 
-  // Chrome / Edge / Android : vraie invite d'installation native.
+  // Chrome / Edge / Android / Windows / etc. : vraie invite d'installation native.
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
+    const platform = detectPlatform();
     const banner = buildBanner({
-      text: "Installe Traceur sur ton téléphone pour l'ouvrir directement depuis l'écran d'accueil.",
+      text: INSTALL_MESSAGES[platform] || INSTALL_MESSAGES.other,
       buttonLabel: 'Installer',
       onAccept: async () => {
         banner.remove();

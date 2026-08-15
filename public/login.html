@@ -26,7 +26,8 @@
     backdrop-filter: blur(6px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     max-width: 420px;
   }
-  .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+  .icon { margin-bottom: 0.5rem; }
+  .icon img { width: 72px; height: 72px; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
   h1 { color: #ffffff; font-size: 1.9rem; font-weight: 600; margin: 0 0 0.5rem 0; text-shadow: 0 2px 10px rgba(0,0,0,.3); }
   p { color: #eafbe7; font-size: 1.05rem; margin-top: 0.4rem; opacity: 0.9; }
   .buttons { display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.8rem; }
@@ -50,7 +51,7 @@
 </head>
 <body>
   <div class="container">
-    <div class="icon">🥾</div>
+    <div class="icon"><img src="/icons/icon-512.png" alt="Traceur"></div>
     <div id="loading" class="loading">Chargement…</div>
 
     <div id="login-view" class="hidden">
