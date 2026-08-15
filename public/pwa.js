@@ -1,0 +1,116 @@
+// public/pwa.js
+//
+// Enregistre le service worker et affiche une bannière d'installation
+// personnalisée dès que le navigateur signale que l'app est installable
+// (événement `beforeinstallprompt`, Chrome/Edge/Android — Chrome masque de
+// plus en plus souvent sa propre mini-barre automatique par défaut, une
+// bannière maison est donc plus fiable pour vraiment la proposer).
+//
+// Important : iOS/Safari ne déclenche JAMAIS `beforeinstallprompt` — Apple
+// n'expose aucune invite automatique, l'utilisateur doit passer par
+// Partager → "Sur l'écran d'accueil" à la main. Rien ne permet de
+// contourner ça côté web ; on affiche un petit rappel dédié à ce cas.
+
+(function () {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+
+  const DISMISS_KEY = 'traceur_pwa_install_dismissed_at';
+  const DISMISS_DAYS = 7;
+
+  function wasRecentlyDismissed() {
+    const raw = localStorage.getItem(DISMISS_KEY);
+    if (!raw) return false;
+    const elapsedDays = (Date.now() - Number(raw)) / (1000 * 60 * 60 * 24);
+    return elapsedDays < DISMISS_DAYS;
+  }
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  function isIos() {
+    return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+  }
+
+  function buildBanner({ text, buttonLabel, onAccept }) {
+    const bar = document.createElement('div');
+    bar.setAttribute('role', 'dialog');
+    bar.setAttribute('aria-label', "Installer l'application");
+    bar.style.cssText = [
+      'position:fixed', 'left:12px', 'right:12px', 'bottom:12px', 'z-index:4000',
+      'display:flex', 'align-items:center', 'gap:12px',
+      'background:#10140F', 'color:#F1ECDD', 'border-radius:12px',
+      'padding:12px 14px', 'box-shadow:0 12px 30px rgba(0,0,0,.35)',
+      'font-family:Arial,Helvetica,sans-serif', 'font-size:13.5px',
+    ].join(';');
+
+    const icon = document.createElement('span');
+    icon.textContent = '📲';
+    icon.style.fontSize = '20px';
+
+    const label = document.createElement('span');
+    label.textContent = text;
+    label.style.flex = '1';
+    label.style.lineHeight = '1.4';
+
+    const acceptBtn = document.createElement('button');
+    acceptBtn.textContent = buttonLabel;
+    acceptBtn.style.cssText = [
+      'background:#C9752E', 'color:#fff', 'border:none', 'border-radius:7px',
+      'padding:8px 12px', 'font-weight:700', 'font-size:12.5px', 'cursor:pointer', 'white-space:nowrap',
+    ].join(';');
+    acceptBtn.addEventListener('click', onAccept);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Fermer');
+    closeBtn.style.cssText = [
+      'background:transparent', 'border:none', 'color:#C9D6C9',
+      'font-size:15px', 'cursor:pointer', 'padding:4px',
+    ].join(';');
+    closeBtn.addEventListener('click', () => {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      bar.remove();
+    });
+
+    bar.append(icon, label, acceptBtn, closeBtn);
+    document.body.appendChild(bar);
+    return bar;
+  }
+
+  if (isStandalone() || wasRecentlyDismissed()) return;
+
+  // Chrome / Edge / Android : vraie invite d'installation native.
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    const banner = buildBanner({
+      text: "Installe Traceur sur ton téléphone pour l'ouvrir directement depuis l'écran d'accueil.",
+      buttonLabel: 'Installer',
+      onAccept: async () => {
+        banner.remove();
+        event.prompt();
+        try { await event.userChoice; } catch {}
+      },
+    });
+  });
+
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+  });
+
+  // iOS/Safari : pas d'invite automatique possible, on rappelle juste la marche à suivre.
+  if (isIos()) {
+    buildBanner({
+      text: "Sur iPhone : appuie sur Partager, puis \u00abSur l'écran d'accueil\u00bb pour installer Traceur.",
+      buttonLabel: 'Compris',
+      onAccept: function () {
+        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        this.parentElement && this.parentElement.remove();
+      },
+    });
+  }
+})();
