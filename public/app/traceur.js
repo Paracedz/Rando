@@ -694,6 +694,33 @@ document.getElementById('fileInput').addEventListener('change', e => {
     });
   }
 
+  /* Tiroir plein écran sur mobile (voir le bloc @media dans la <style> de
+     app.html) : le hamburger bascule body.mobile-nav-open, qui transforme
+     le header lui-même en tiroir (les mêmes menus/panneaux, juste
+     repositionnés en CSS — aucune duplication d'éléments/ID). */
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  function closeMobileDrawer(){
+    closeAll();
+    document.body.classList.remove('mobile-nav-open');
+    if(mobileMenuBtn){
+      mobileMenuBtn.textContent = '☰';
+      mobileMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+  if(mobileMenuBtn){
+    mobileMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !document.body.classList.contains('mobile-nav-open');
+      if(willOpen){
+        document.body.classList.add('mobile-nav-open');
+        mobileMenuBtn.textContent = '✕';
+        mobileMenuBtn.setAttribute('aria-expanded', 'true');
+      } else {
+        closeMobileDrawer();
+      }
+    });
+  }
+
   items.forEach(item => {
     const trigger = item.querySelector('.menu-trigger');
     if(!trigger) return;
@@ -728,14 +755,15 @@ document.getElementById('fileInput').addEventListener('change', e => {
     });
   });
 
-  // Clic en dehors, ou touche Échap : referme les menus ouverts.
-  document.addEventListener('click', () => closeAll());
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeAll(); });
+  // Clic en dehors, ou touche Échap : referme les menus ouverts (et le
+  // tiroir mobile s'il est ouvert).
+  document.addEventListener('click', () => closeMobileDrawer());
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeMobileDrawer(); });
   // Un clic à l'intérieur d'un panneau ne doit pas le refermer lui-même
   // via le listener document ci-dessous (sinon impossible d'interagir
   // avec le <select>) — mais un clic sur une vraie action (bouton/label,
   // ex. "Charger un GPX", "Inverser le sens"...) doit bien refermer le
-  // menu une fois l'action déclenchée.
+  // menu (et le tiroir mobile) une fois l'action déclenchée.
   items.forEach(item => {
     const panel = item.querySelector('.menu-panel');
     if(!panel) return;
@@ -743,7 +771,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
       e.stopPropagation();
       const actionEl = e.target.closest('button, label');
       if(actionEl && panel.contains(actionEl)){
-        setTimeout(() => closeAll(), 0);
+        setTimeout(() => closeMobileDrawer(), 0);
       }
     });
   });

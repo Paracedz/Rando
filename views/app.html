@@ -80,6 +80,83 @@
   #shareStatusMsg{ font-size:12px; margin-top:10px; display:none; }
   #shareStatusMsg.ok{ color:#1F7A4D; }
   #shareStatusMsg.err{ color:#A5432E; }
+
+  /* Bouton hamburger : masqué sur grand écran, le header desktop suffit. */
+  #mobileMenuBtn{
+    display:none; background:transparent; border:none; color:#F1ECDD;
+    font-size:20px; line-height:1; padding:6px 8px; cursor:pointer; border-radius:6px;
+  }
+  #mobileMenuBtn:hover{ background:rgba(255,255,255,.08); }
+
+  /* ============================================================
+     SMARTPHONE — header réduit à une ligne (hamburger + titre), tout le
+     reste (menus Parcours/Avancé, compte, déconnexion) passe dans un
+     tiroir plein écran ouvert par le hamburger. Les panneaux réutilisent
+     exactement les mêmes éléments/ID que sur desktop (juste repositionnés
+     en CSS), donc toute la logique JS existante continue de fonctionner
+     à l'identique.
+     ============================================================ */
+  @media (max-width: 700px){
+    header.app-header{ padding:0 8px; gap:8px; height:48px; }
+    header.app-header .brand h1{ font-size:16px; }
+    header.app-header .brand .tagline{ display:none; } /* une seule ligne : pas de place pour la sous-accroche */
+    #mobileMenuBtn{ display:inline-flex; align-items:center; justify-content:center; order:-1; }
+
+    .main-menu, .account-cluster{ display:none; }
+
+    body.mobile-nav-open{ overflow:hidden; } /* pas de scroll de la page derrière le tiroir ouvert */
+    body.mobile-nav-open header.app-header{
+      position:fixed; inset:0; z-index:3000; height:auto; max-height:100vh;
+      flex-direction:column; align-items:stretch; overflow-y:auto; padding:0 0 20px;
+    }
+    body.mobile-nav-open header.app-header > .brand{
+      padding:12px 16px; border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    body.mobile-nav-open #mobileMenuBtn{ position:absolute; top:6px; right:8px; font-size:22px; }
+
+    body.mobile-nav-open .main-menu,
+    body.mobile-nav-open .account-cluster{
+      display:flex; flex-direction:column; align-items:stretch; width:100%;
+      margin:0; gap:0; font-size:13px;
+    }
+    body.mobile-nav-open .account-cluster{ border-top:8px solid rgba(255,255,255,.06); padding-top:4px; }
+    body.mobile-nav-open .account-cluster .plan{ padding:8px 16px; font-size:11px; }
+
+    body.mobile-nav-open .menu-item{ width:100%; position:static; }
+    body.mobile-nav-open .menu-trigger{
+      width:100%; justify-content:space-between; padding:14px 16px; border-radius:0;
+      border-bottom:1px solid rgba(255,255,255,.08); font-size:14px;
+    }
+    body.mobile-nav-open .menu-trigger:hover,
+    body.mobile-nav-open .menu-item.open .menu-trigger{ background:rgba(255,255,255,.08); color:#F1ECDD; }
+
+    body.mobile-nav-open .menu-panel{
+      position:static; display:none; width:100%; min-width:0;
+      border:none; border-radius:0; box-shadow:none; margin:0; padding:10px 16px 16px;
+      background:#F1ECDD;
+    }
+    body.mobile-nav-open .menu-item.open .menu-panel{ display:block; }
+    body.mobile-nav-open .menu-panel-right{ right:auto; }
+
+    /* Le profil altimétrique ne s'affiche que carte agrandie : sur un
+       petit écran, l'avoir en permanence en plus de la carte et du
+       panneau latéral ne laisse de place pour rien. Priorité sur le
+       style en ligne posé par enableUIAfterLoad()/le bouton replier. */
+    #elevWrap{ display:none !important; }
+    .layout.map-expanded #elevWrap{ display:block !important; height:110px; }
+
+    /* Cartes de la barre latérale ("Parcours", "Sauvegardes",
+       "Découpage en jours"...) : beaucoup plus compactes. */
+    aside{ padding:10px 10px 24px; max-height:38vh; }
+    .card{ padding:9px 10px; margin-bottom:10px; border-radius:8px; }
+    .card h2{ font-size:11px; margin-bottom:6px; }
+    .stat-row{ gap:4px; font-size:12px; }
+    table.segs{ font-size:11px; }
+    table.segs td{ padding:4px 3px; }
+    .save-row{ padding:6px 0; }
+    .save-label{ font-size:11.5px; }
+    .save-time{ font-size:10px; }
+  }
 </style>
 </head>
 <body>
@@ -119,12 +196,13 @@
   </div>
 
 <header class="app-header">
+  <button type="button" id="mobileMenuBtn" aria-label="Menu" aria-expanded="false" aria-controls="mainMenuNav">☰</button>
   <div class="brand">
     <h1>Traceur</h1>
     <span class="tagline">Prépare tes étapes</span>
   </div>
 
-  <nav class="main-menu">
+  <nav class="main-menu" id="mainMenuNav">
     <div class="menu-item" id="menuParcoursItem">
       <button type="button" class="menu-trigger" id="menuParcoursBtn" aria-haspopup="true" aria-expanded="false">Parcours <span class="menu-caret">▾</span></button>
       <div class="menu-panel" id="menuParcoursPanel">
