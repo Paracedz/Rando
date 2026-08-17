@@ -682,6 +682,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
   const items = [
     document.getElementById('menuParcoursItem'),
     document.getElementById('menuAvanceItem'),
+    document.getElementById('menuSavesItem'),
     document.getElementById('menuAccountItem')
   ].filter(Boolean);
 
@@ -736,24 +737,30 @@ document.getElementById('fileInput').addEventListener('change', e => {
   // Ouverture au survol (souris) : pas besoin de cliquer sur l'entête.
   // Un petit délai à la fermeture évite que le menu ne se referme quand
   // la souris traverse le petit espace vide entre l'entête et le panneau.
-  let hoverCloseTimer = null;
-  items.forEach(item => {
-    const trigger = item.querySelector('.menu-trigger');
-    if(!trigger) return;
-    item.addEventListener('mouseenter', () => {
-      clearTimeout(hoverCloseTimer);
-      closeAll(item);
-      item.classList.add('open');
-      trigger.setAttribute('aria-expanded', 'true');
+  // Limité aux appareils à souris (hover réel) : sur tactile, le navigateur
+  // synthétise souvent un mouseenter juste avant le click au premier tap,
+  // ce qui ouvrait puis refermait aussitôt le menu (il fallait taper 2 fois).
+  const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if(supportsHover){
+    let hoverCloseTimer = null;
+    items.forEach(item => {
+      const trigger = item.querySelector('.menu-trigger');
+      if(!trigger) return;
+      item.addEventListener('mouseenter', () => {
+        clearTimeout(hoverCloseTimer);
+        closeAll(item);
+        item.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+      });
+      item.addEventListener('mouseleave', () => {
+        clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = setTimeout(() => {
+          item.classList.remove('open');
+          trigger.setAttribute('aria-expanded', 'false');
+        }, 200);
+      });
     });
-    item.addEventListener('mouseleave', () => {
-      clearTimeout(hoverCloseTimer);
-      hoverCloseTimer = setTimeout(() => {
-        item.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-      }, 200);
-    });
-  });
+  }
 
   // Clic en dehors, ou touche Échap : referme les menus ouverts (et le
   // tiroir mobile s'il est ouvert).
@@ -1036,35 +1043,49 @@ document.getElementById('saveStateBtn').addEventListener('click', async () => {
   }
 });
 
+function buildSaveRow(s){
+  // Ces sauvegardes traversent maintenant plusieurs jours/sessions : on
+  // affiche la date en plus de l'heure (contrairement à l'ancien
+  // affichage "heure seule", suffisant tant que tout restait en mémoire
+  // le temps de la session).
+  const when = new Date(s.created_at).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  const row = document.createElement('div');
+  row.className = 'save-row';
+  row.innerHTML = `
+    <div class="save-info">
+      <div class="save-label">${escapeHtml(s.label)}</div>
+      <div class="save-time">${when}</div>
+    </div>
+    <div class="row-actions">
+      <button class="mini-btn share-btn" title="Partager avec un ami" aria-label="Partager avec un ami">📤</button>
+      <button class="mini-btn restore-btn" title="Reprendre cette sauvegarde" aria-label="Reprendre cette sauvegarde">↺</button>
+      <button class="del-btn" title="Supprimer cette sauvegarde" aria-label="Supprimer cette sauvegarde">${DEL_ICON}</button>
+    </div>`;
+  row.querySelector('.share-btn').addEventListener('click', () => openShareModal(s.id));
+  row.querySelector('.restore-btn').addEventListener('click', () => restoreSavedState(s.id));
+  row.querySelector('.del-btn').addEventListener('click', () => deleteSavedState(s.id));
+  return row;
+}
+
 function renderSaveList(){
+  // Desktop/tablette : carte "Sauvegardes" de la barre latérale.
   const wrap = document.getElementById('saveListWrap');
   const list = document.getElementById('saveList');
-  if(savedRoutesCache.length === 0){ wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
+  const hasSaves = savedRoutesCache.length > 0;
+  wrap.style.display = hasSaves ? 'block' : 'none';
   list.innerHTML = '';
-  savedRoutesCache.forEach(s => {
-    // Ces sauvegardes traversent maintenant plusieurs jours/sessions : on
-    // affiche la date en plus de l'heure (contrairement à l'ancien
-    // affichage "heure seule", suffisant tant que tout restait en mémoire
-    // le temps de la session).
-    const when = new Date(s.created_at).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
-    const row = document.createElement('div');
-    row.className = 'save-row';
-    row.innerHTML = `
-      <div class="save-info">
-        <div class="save-label">${escapeHtml(s.label)}</div>
-        <div class="save-time">${when}</div>
-      </div>
-      <div class="row-actions">
-        <button class="mini-btn share-btn" title="Partager avec un ami" aria-label="Partager avec un ami">📤</button>
-        <button class="mini-btn restore-btn" title="Reprendre cette sauvegarde" aria-label="Reprendre cette sauvegarde">↺</button>
-        <button class="del-btn" title="Supprimer cette sauvegarde" aria-label="Supprimer cette sauvegarde">${DEL_ICON}</button>
-      </div>`;
-    row.querySelector('.share-btn').addEventListener('click', () => openShareModal(s.id));
-    row.querySelector('.restore-btn').addEventListener('click', () => restoreSavedState(s.id));
-    row.querySelector('.del-btn').addEventListener('click', () => deleteSavedState(s.id));
-    list.appendChild(row);
-  });
+  savedRoutesCache.forEach(s => list.appendChild(buildSaveRow(s)));
+
+  // Mobile : même contenu, dans le menu "Sauvegardes" du tiroir hamburger
+  // (voir header). Élément optionnel : absent sur d'anciennes versions
+  // de la page, on ne casse rien si jamais il manque.
+  const menuList = document.getElementById('menuSaveList');
+  const menuEmpty = document.getElementById('menuSaveEmpty');
+  if(menuList){
+    menuList.innerHTML = '';
+    savedRoutesCache.forEach(s => menuList.appendChild(buildSaveRow(s)));
+  }
+  if(menuEmpty) menuEmpty.style.display = hasSaves ? 'none' : 'block';
 }
 
 /* ============================================================

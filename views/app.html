@@ -25,6 +25,9 @@
   header.app-header .brand{ display:flex; align-items:baseline; gap:8px; }
 
   .main-menu{ display:flex; gap:6px; }
+  /* Sur desktop, les sauvegardes restent affichées dans la carte "Sauvegardes"
+     de la barre latérale — ce menu ne sert que sur mobile (voir @media plus bas). */
+  #menuSavesItem{ display:none; }
   .menu-item{ position:relative; }
   .menu-trigger{
     background:transparent; border:1px solid transparent; cursor:pointer;
@@ -123,6 +126,10 @@
     body.mobile-nav-open .account-cluster .plan{ padding:8px 16px; font-size:11px; }
 
     body.mobile-nav-open .menu-item{ width:100%; position:static; }
+    body.mobile-nav-open #menuSavesItem{ display:block; }
+    /* La carte "Sauvegardes" de la barre latérale est remontée dans le
+       menu hamburger sur mobile : plus besoin de la dupliquer ici. */
+    #saveCard{ display:none; }
     body.mobile-nav-open .menu-trigger{
       width:100%; justify-content:space-between; padding:14px 16px; border-radius:0;
       border-bottom:1px solid rgba(255,255,255,.08); font-size:14px;
@@ -221,7 +228,7 @@
         <input type="file" id="fileInput" accept=".gpx" style="display:none" />
         <button class="menu-action" id="reverseBtn" disabled><span>⇄ Inverser le sens</span></button>
         <button class="menu-action" id="resetBtn" disabled><span>↺ Réinitialiser</span></button>
-        <button class="menu-action" id="downloadFullTrackBtn"><span>⇩ Télécharger le parcours</span></button>
+        <button class="menu-action" id="downloadFullTrackBtn"><span>⇩ Télécharger mon parcours</span></button>
         <button class="menu-action" id="undoBtn" disabled title="Annuler la dernière action"><span>↩ Annuler</span></button>
         <div class="menu-sep"></div>
         <button class="menu-action" id="saveStateBtn" disabled><span>💾 Sauvegarder l'état actuel</span></button>
@@ -237,6 +244,14 @@
           <button class="menu-action" id="loopModeBtn" data-premium><span>🔗 Déplacer le point Départ/Arrivée</span><span class="premium-flag" data-premium-flag>💎</span></button>
           <div class="help" id="loopHelp" style="display:none; padding:4px 8px;">Le parcours est une boucle : glissez le repère <b>D·A</b> à l'endroit souhaité sur le tracé pour y déplacer ensemble le départ et l'arrivée.</div>
         </div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="menuSavesItem">
+      <button type="button" class="menu-trigger" id="menuSavesBtn" aria-haspopup="true" aria-expanded="false">Sauvegardes <span class="menu-caret">▾</span></button>
+      <div class="menu-panel" id="menuSavesPanel">
+        <div id="menuSaveEmpty" class="help" style="padding:4px 8px;">Aucune sauvegarde pour l'instant.</div>
+        <div id="menuSaveList"></div>
       </div>
     </div>
   </nav>
