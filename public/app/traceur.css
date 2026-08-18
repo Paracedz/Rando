@@ -25,7 +25,8 @@ body{
   color:var(--ink);
   display:flex;
   flex-direction:column;
-  height:100vh;
+  height:100vh;   /* repli pour les navigateurs qui ne connaissent pas dvh */
+  height:100dvh;  /* hauteur réellement visible (barre d'adresse/barre système incluses) */
   overflow:hidden;
 }
 
@@ -410,7 +411,8 @@ table.segs tr:last-child td{border-bottom:none;}
 }
 .poi-loading-box{
   background:var(--white); border-radius:14px; padding:22px 26px;
-  max-width:300px; display:flex; flex-direction:column; align-items:center; gap:12px;
+  max-width:300px; width:calc(100% - 48px); box-sizing:border-box;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
   box-shadow:0 12px 40px rgba(0,0,0,.28); text-align:center;
 }
 .poi-loading-spinner{

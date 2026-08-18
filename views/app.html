@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Traceur — Prépare tes étapes</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#10140F">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -109,7 +109,8 @@
 
     body.mobile-nav-open{ overflow:hidden; } /* pas de scroll de la page derrière le tiroir ouvert */
     body.mobile-nav-open header.app-header{
-      position:fixed; inset:0; z-index:3000; height:auto; max-height:100vh;
+      position:fixed; inset:0; z-index:3000; height:auto;
+      max-height:100vh; max-height:100dvh;
       flex-direction:column; align-items:stretch; overflow-y:auto; padding:0 0 20px;
     }
     body.mobile-nav-open header.app-header > .brand{
@@ -150,7 +151,12 @@
        panneau latéral ne laisse de place pour rien. Priorité sur le
        style en ligne posé par enableUIAfterLoad()/le bouton replier. */
     #elevWrap{ display:none !important; }
-    .layout.map-expanded #elevWrap{ display:block !important; height:110px; }
+    .layout.map-expanded #elevWrap{
+      display:block !important;
+      height:110px;
+      height:calc(110px + env(safe-area-inset-bottom, 0px));
+      padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));
+    }
 
     /* Cartes de la barre latérale ("Parcours", "Sauvegardes",
        "Découpage en jours"...) : beaucoup plus compactes. */
@@ -388,7 +394,7 @@
         <span id="mergeInfoBannerText"></span>
         <button id="mergeInfoBannerClose" aria-label="Fermer">×</button>
       </div>
-      <button class="map-toggle-btn" id="mapExpandBtn" title="Agrandir la carte">⤢</button>
+      <button class="map-toggle-btn" id="mapExpandBtn" title="Agrandir la carte"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H4a1 1 0 0 0-1 1v4"/><path d="M16 3h4a1 1 0 0 1 1 1v4"/><path d="M8 21H4a1 1 0 0 1-1-1v-4"/><path d="M16 21h4a1 1 0 0 0 1-1v-4"/></svg></button>
       <div class="map-empty" id="mapEmpty">
         <div class="map-empty-inner">
           <h3>Aucun tracé</h3>

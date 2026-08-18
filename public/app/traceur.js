@@ -567,7 +567,7 @@ function showPoiLoadingPopin(cats, batchCount){
   document.getElementById('poiLoadingPopin').style.display = 'flex';
 }
 function updatePoiLoadingProgress(received, total){
-  if(!total || total <= 1) return; // pas la peine d'afficher "1/1"
+  if(!total) return;
   const popin = document.getElementById('poiLoadingPopin');
   const base = popin.dataset.baseText || '';
   document.getElementById('poiLoadingText').textContent = `${base} (${received}/${total})`;
@@ -2315,11 +2315,14 @@ document.getElementById('elevToggleBtn').addEventListener('click', () => {
   }, 190);
 });
 
+const MAP_EXPAND_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H4a1 1 0 0 0-1 1v4"/><path d="M16 3h4a1 1 0 0 1 1 1v4"/><path d="M8 21H4a1 1 0 0 1-1-1v-4"/><path d="M16 21h4a1 1 0 0 0 1-1v-4"/></svg>';
+const MAP_COLLAPSE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4"/><path d="M20 9V5a1 1 0 0 0-1-1h-4"/><path d="M4 15v4a1 1 0 0 0 1 1h4"/><path d="M20 15v4a1 1 0 0 1-1 1h-4"/></svg>';
+
 document.getElementById('mapExpandBtn').addEventListener('click', () => {
   const layoutEl = document.querySelector('.layout');
   const btn = document.getElementById('mapExpandBtn');
   const expanded = layoutEl.classList.toggle('map-expanded');
-  btn.innerHTML = expanded ? '⤡' : '⤢';
+  btn.innerHTML = expanded ? MAP_COLLAPSE_ICON : MAP_EXPAND_ICON;
   btn.title = expanded ? 'Réduire la carte' : 'Agrandir la carte';
   setTimeout(() => {
     map.invalidateSize();

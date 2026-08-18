@@ -18,14 +18,13 @@
     });
   }
 
-  const DISMISS_KEY = 'traceur_pwa_install_dismissed_at';
-  const DISMISS_DAYS = 7;
+  // sessionStorage (pas localStorage) : la bannière doit se représenter à
+  // chaque nouvelle session (nouvel onglet/redémarrage du navigateur ou de
+  // l'app), pas seulement une fois par semaine.
+  const DISMISS_KEY = 'traceur_pwa_install_dismissed';
 
   function wasRecentlyDismissed() {
-    const raw = localStorage.getItem(DISMISS_KEY);
-    if (!raw) return false;
-    const elapsedDays = (Date.now() - Number(raw)) / (1000 * 60 * 60 * 24);
-    return elapsedDays < DISMISS_DAYS;
+    return sessionStorage.getItem(DISMISS_KEY) === '1';
   }
 
   function isStandalone() {
@@ -95,7 +94,7 @@
       'font-size:15px', 'cursor:pointer', 'padding:4px',
     ].join(';');
     closeBtn.addEventListener('click', () => {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      sessionStorage.setItem(DISMISS_KEY, '1');
       bar.remove();
     });
 
@@ -122,7 +121,7 @@
   });
 
   window.addEventListener('appinstalled', () => {
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    sessionStorage.setItem(DISMISS_KEY, '1');
   });
 
   // iOS/Safari : pas d'invite automatique possible, on rappelle juste la marche à suivre.
@@ -131,7 +130,7 @@
       text: "Sur iPhone : appuie sur Partager, puis \u00abSur l'écran d'accueil\u00bb pour installer Traceur.",
       buttonLabel: 'Compris',
       onAccept: function () {
-        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        sessionStorage.setItem(DISMISS_KEY, '1');
         this.parentElement && this.parentElement.remove();
       },
     });
