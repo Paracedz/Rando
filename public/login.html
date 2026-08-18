@@ -47,6 +47,19 @@
   .hidden { display: none; }
   .loading { color: #eafbe7; }
   .error { color: #ffd7d7; font-size: .85rem; margin-top: 1rem; }
+  .success { color: #d7ffe0; font-size: .85rem; margin-top: 1rem; }
+  .divider { display: flex; align-items: center; gap: .7rem; margin: 1.4rem 0; color: #eafbe7; opacity: .7; font-size: .8rem; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.3); }
+  .magic-form { display: flex; flex-direction: column; gap: .6rem; }
+  .magic-form input[type="email"] {
+    padding: .7rem .9rem; border-radius: 10px; border: none; font-size: .95rem;
+    background: rgba(255,255,255,.92); color: #1e5631;
+  }
+  .magic-form button {
+    padding: .7rem 1rem; border-radius: 10px; border: none; cursor: pointer;
+    background: #eafbe7; color: #1e5631; font-weight: 700; font-size: .95rem;
+  }
+  .magic-form button:disabled { opacity: .6; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -61,7 +74,16 @@
         <button class="social google" id="google-btn"><span>🔵</span> Continuer avec Google</button>
         <button class="social facebook" id="facebook-btn"><span>📘</span> Continuer avec Facebook</button>
       </div>
+
+      <div class="divider">ou</div>
+
+      <form class="magic-form" id="magic-form">
+        <input type="email" id="magic-email" placeholder="ton@email.com" required autocomplete="email">
+        <button type="submit" id="magic-submit">✉️ Recevoir un lien de connexion</button>
+      </form>
+
       <div id="error" class="error hidden"></div>
+      <div id="success" class="success hidden"></div>
     </div>
 
   </div>
@@ -138,6 +160,41 @@
 
   document.getElementById('facebook-btn').addEventListener('click', () => {
     sb.auth.signInWithOAuth({ provider: 'facebook', options: { redirectTo: window.location.origin + '/login.html' } });
+  });
+
+  const successEl = document.getElementById('success');
+  const magicForm = document.getElementById('magic-form');
+  const magicSubmit = document.getElementById('magic-submit');
+
+  magicForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('magic-email').value.trim();
+    if (!email) return;
+
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+    magicSubmit.disabled = true;
+    magicSubmit.textContent = 'Envoi en cours…';
+
+    // Même mécanisme que Google/Facebook : Supabase renvoie sur cette
+    // même page (login.html) une fois le lien cliqué, onAuthStateChange
+    // ci-dessus prend le relais (sync du cookie + redirection vers /app).
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/login.html' },
+    });
+
+    magicSubmit.disabled = false;
+    magicSubmit.textContent = '✉️ Recevoir un lien de connexion';
+
+    if (error) {
+      errorEl.textContent = error.message;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    successEl.textContent = `Lien de connexion envoyé à ${email} — vérifie ta boîte mail (et les spams).`;
+    successEl.classList.remove('hidden');
+    magicForm.reset();
   });
 
   init();
