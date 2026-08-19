@@ -115,6 +115,9 @@ function initMap(){
   // Fond par défaut : carte topo avec courbes de niveau.
   topoLayer.addTo(map);
 
+  // Échelle de distance, en bas à gauche.
+  L.control.scale({position: 'bottomleft', metric: true, imperial: false, maxWidth: 120}).addTo(map);
+
   // Si la carte topo échoue à charger (tuiles indisponibles), on revient
   // silencieusement sur le plan OpenStreetMap standard.
   let topoErrors = 0;

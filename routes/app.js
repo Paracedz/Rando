@@ -13,7 +13,7 @@ const router = express.Router();
 
 // Numéro de version affiché dans le menu "compte" (bulle nom/email).
 // À incrémenter à chaque nouveau merge de code sur main.
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 
 const templatePath = path.join(__dirname, '..', 'views', 'app.html');
 
