@@ -11,6 +11,10 @@ const { supabaseAdmin } = require('../lib/supabaseAdmin');
 
 const router = express.Router();
 
+// Numéro de version affiché dans le menu "compte" (bulle nom/email).
+// À incrémenter à chaque nouveau merge de code sur main.
+const APP_VERSION = '1.0';
+
 const templatePath = path.join(__dirname, '..', 'views', 'app.html');
 
 router.get('/app', requireAuthPage, async (req, res) => {
@@ -61,7 +65,8 @@ router.get('/app', requireAuthPage, async (req, res) => {
     .replace(/__USER_GIVEN_NAME__/g, escapeHtml(displayGivenName))
     .replace(/__USER_FULL_NAME__/g, escapeHtml(displayFullName))
     .replace('__PLAN_LABEL__', plan === 'pro' ? '★ Premium' : 'Compte gratuit')
-    .replace('__PLAN_VALUE__', plan === 'pro' ? 'pro' : 'free');
+    .replace('__PLAN_VALUE__', plan === 'pro' ? 'pro' : 'free')
+    .replace('__APP_VERSION__', APP_VERSION);
 
   res.set('Content-Type', 'text/html');
   res.send(html);
