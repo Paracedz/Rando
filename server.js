@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth');
 const appRoutes = require('./routes/app');
 const usersRoutes = require('./routes/users');
 const savedRoutesRoutes = require('./routes/savedRoutes');
+const authHookRoutes = require('./routes/authHook');
 const { getUserFromRequest } = require('./middleware/requireAuth');
 
 const app = express();
@@ -44,6 +45,7 @@ app.use(authRoutes);
 app.use(appRoutes);
 app.use(usersRoutes);
 app.use(savedRoutesRoutes);
+app.use(authHookRoutes);
 
 // GET / AVANT express.static : sinon un éventuel public/index.html serait
 // servi automatiquement en premier et empêcherait cette redirection de
