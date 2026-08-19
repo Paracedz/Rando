@@ -244,6 +244,49 @@ const JOIN_SPLIT_DEBOUNCE_PTS = 3;
 // distance) qui compliqueraient inutilement le graphe de fusion.
 const CROSS_MERGE_DIST_M = 30;
 
+/* Pont virtuel entre 2 tracés qui ne se croisent pas du tout : si l'une
+   des 4 combinaisons d'extrémités (D1/A1 du tracé 1 avec D2/A2 du tracé 2)
+   est à moins de VIRTUAL_CROSSING_MAX_DIST_M, on les relie quand même au
+   lieu de bloquer la fusion. */
+const VIRTUAL_CROSSING_MAX_DIST_M = 500;
+
+function findVirtualEndpointBridge(pts1, i1start, i1end, pts2, i2start, i2end, maxDist){
+  const candidates = [
+    {node1:'D1', idx1:i1start, node2:'D2', idx2:i2start},
+    {node1:'D1', idx1:i1start, node2:'A2', idx2:i2end},
+    {node1:'A1', idx1:i1end,   node2:'D2', idx2:i2start},
+    {node1:'A1', idx1:i1end,   node2:'A2', idx2:i2end},
+  ];
+  let best = null;
+  candidates.forEach(c => {
+    const p1 = pts1[c.idx1], p2 = pts2[c.idx2];
+    const d = haversine(p1.lat, p1.lon, p2.lat, p2.lon);
+    if(d <= maxDist && (!best || d < best.dist)){
+      best = {...c, lat1:p1.lat, lon1:p1.lon, ele1:p1.ele, lat2:p2.lat, lon2:p2.lon, ele2:p2.ele, dist:d};
+    }
+  });
+  return best;
+}
+
+/* Tente de relier 2 points par un vrai chemin piéton, via une instance
+   publique et gratuite d'OSRM (communautaire, meilleur effort — pas de
+   garantie de disponibilité). Se replie sur une ligne droite si le
+   routage échoue (réseau, itinéraire introuvable, service indisponible). */
+async function fetchBridgePath(lat1, lon1, lat2, lon2){
+  try{
+    const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const coords = data && data.routes && data.routes[0] && data.routes[0].geometry && data.routes[0].geometry.coordinates;
+    if(!Array.isArray(coords) || coords.length < 2) throw new Error('itinéraire vide');
+    return {points: coords.map(([lon,lat]) => ({lat, lon})), routed: true};
+  }catch(err){
+    console.warn('Routage du pont indisponible, ligne droite utilisée :', err);
+    return {points: [{lat:lat1, lon:lon1}, {lat:lat2, lon:lon2}], routed: false};
+  }
+}
+
 /* Grille spatiale restreinte à un sous-intervalle [lo,hi] d'un tracé —
    variante de buildPointGrid utile ici car track1/track2 sont toujours
    manipulés avec leurs propres bornes startIdx/endIdx. */
@@ -1491,27 +1534,29 @@ document.getElementById('secondFileInput').addEventListener('change', e => {
   reader.readAsText(file);
 });
 
-function handleSecondGpxText(text){
+async function handleSecondGpxText(text){
   try{
     const {points: pts2} = parseGPX(text);
     if(pts2.length < 2) throw new Error('Le 2ᵉ tracé doit contenir au moins 2 points.');
     closeAddGpxModal();
-    startMergeWithSecondTrack(pts2);
+    await startMergeWithSecondTrack(pts2);
   }catch(err){
     alert('Erreur : ' + err.message);
   }
 }
 
-function startMergeWithSecondTrack(pts2){
+async function startMergeWithSecondTrack(pts2){
   const cum2 = computeCum(pts2);
   const track2 = {rawPoints: pts2, points: pts2.slice(), cum: cum2, startIdx: 0, endIdx: pts2.length - 1};
 
-  const clusters = findProximityCrossings(points, startIdx, endIdx, track2.points, track2.startIdx, track2.endIdx, JOIN_SPLIT_THRESHOLD_M);
+  showMergeInfoBanner('Recherche d\'un point de jonction entre les 2 parcours…', 0);
+  const graph = await computeMergeGraph(points, startIdx, endIdx, track2.points, track2.startIdx, track2.endIdx);
 
-  if(clusters.length === 0){
-    showMergeInfoBanner("Les 2 parcours ne se croisent pas : la fusion n'est possible qu'entre parcours qui se croisent. Le 2ᵉ tracé n'a pas été conservé.");
+  if(!graph){
+    showMergeInfoBanner(`Les 2 parcours ne se croisent pas, et leurs extrémités sont à plus de ${VIRTUAL_CROSSING_MAX_DIST_M} m l'une de l'autre : fusion impossible. Le 2ᵉ tracé n'a pas été conservé.`);
     return;
   }
+  if(!graph.bridged) document.getElementById('mergeInfoBanner').style.display = 'none';
 
   // on entre en mode fusion : plus de découpage en jours sur le parcours 1
   boundaries = [startIdx, endIdx];
@@ -1521,55 +1566,118 @@ function startMergeWithSecondTrack(pts2){
     track2,
     hasStart1: true, hasEnd1: true, hasStart2: true, hasEnd2: true,
     selectedSegId: null,
-    segments: [],
-    crossings: [],
+    segments: graph.segments,
+    crossings: graph.crossings,
     layers: {}
   };
   enterMergeModeUI();
-  rebuildMergeModel();
+  renderMergeUI();
+  updateMergeCard();
+  checkMergeCompletion();
+
+  if(graph.bridged){
+    showMergeInfoBanner(
+      graph.routed
+        ? "Les 2 parcours ne se croisaient pas : leurs extrémités proches ont été reliées par un itinéraire piéton."
+        : "Les 2 parcours ne se croisaient pas : leurs extrémités proches ont été reliées par une ligne droite (itinéraire indisponible).",
+      7000
+    );
+  }
 
   const allPts = points.slice(startIdx, endIdx+1).concat(track2.points.slice(track2.startIdx, track2.endIdx+1));
   map.fitBounds(L.latLngBounds(allPts.map(p => [p.lat, p.lon])), {padding:[40,40]});
 }
 
-/* Reconstruit entièrement le modèle de segments à partir des positions
-   actuelles des repères D/A des 2 parcours (repart de zéro : toute
-   suppression de tronçon précédente est réinitialisée — c'est le cas
-   uniquement quand on déplace un repère départ/arrivée en cours de fusion). */
-function rebuildMergeModel(){
+/* Calcule le graphe de fusion (croisements + tronçons) entre 2 tracés :
+   1) croisements réels par proximité (comme avant) ;
+   2) à défaut, pont virtuel entre 2 extrémités proches (< VIRTUAL_CROSSING_MAX_DIST_M).
+   Renvoie null si aucune des 2 approches ne trouve de connexion possible. */
+async function computeMergeGraph(pts1, i1start, i1end, pts2, i2start, i2end){
+  const clusters = findProximityCrossings(pts1, i1start, i1end, pts2, i2start, i2end, JOIN_SPLIT_THRESHOLD_M);
+
+  if(clusters.length > 0){
+    const crossings = clusters.map((c, k) => {
+      const j2 = nearestIndexIn(pts2, c.lat, c.lon, i2start, i2end);
+      return {id: 'X'+k, lat: c.lat, lon: c.lon, i1: c.i1, j2};
+    });
+    const cuts1 = crossings.map(c => ({idx: c.i1, nodeId: c.id}));
+    const cuts2 = crossings.map(c => ({idx: c.j2, nodeId: c.id}));
+    const segments = [
+      ...buildTrackSegments(1, i1start, i1end, cuts1),
+      ...buildTrackSegments(2, i2start, i2end, cuts2)
+    ];
+    return {crossings, segments, bridged: false};
+  }
+
+  // Aucun croisement réel : on tente un pont entre 2 extrémités proches.
+  const bridge = findVirtualEndpointBridge(pts1, i1start, i1end, pts2, i2start, i2end, VIRTUAL_CROSSING_MAX_DIST_M);
+  if(!bridge) return null;
+
+  const { points: bridgePts, routed } = await fetchBridgePath(bridge.lat1, bridge.lon1, bridge.lat2, bridge.lon2);
+  // Force les 2 extrémités du pont sur les coordonnées exactes des tracés
+  // (le service de routage accroche parfois au chemin le plus proche,
+  // légèrement décalé).
+  bridgePts[0] = {lat: bridge.lat1, lon: bridge.lon1};
+  bridgePts[bridgePts.length - 1] = {lat: bridge.lat2, lon: bridge.lon2};
+  // Interpolation simple de l'altitude entre les 2 extrémités connues,
+  // faute de mieux pour les points intermédiaires synthétiques.
+  const ele1 = bridge.ele1, ele2 = bridge.ele2;
+  bridgePts.forEach((p, i) => {
+    const t = bridgePts.length > 1 ? i / (bridgePts.length - 1) : 0;
+    p.ele = (typeof ele1 === 'number' && typeof ele2 === 'number') ? ele1 + (ele2 - ele1) * t : (ele1 ?? ele2 ?? 0);
+  });
+
+  const nodeA = 'Xbridge0a', nodeB = 'Xbridge0b';
+  const crossings = [
+    {id: nodeA, lat: bridge.lat1, lon: bridge.lon1},
+    {id: nodeB, lat: bridge.lat2, lon: bridge.lon2},
+  ];
+  const seg1 = buildTrackSegments(1, i1start, i1end, [],
+    bridge.node1 === 'D1' ? nodeA : undefined, bridge.node1 === 'A1' ? nodeA : undefined);
+  const seg2 = buildTrackSegments(2, i2start, i2end, [],
+    bridge.node2 === 'D2' ? nodeB : undefined, bridge.node2 === 'A2' ? nodeB : undefined);
+  const segments = [
+    ...seg1, ...seg2,
+    {id: 'segBridge0', track: 'connector', points: bridgePts, nodeStart: nodeA, nodeEnd: nodeB, deleted: false}
+  ];
+
+  return {crossings, segments, bridged: true, routed, bridgeDist: bridge.dist};
+}
+
+async function rebuildMergeModel(){
   const t2 = mergeState.track2;
   mergeState.hasStart1 = true; mergeState.hasEnd1 = true;
   mergeState.hasStart2 = true; mergeState.hasEnd2 = true;
   mergeState.selectedSegId = null;
 
-  const clusters = findProximityCrossings(points, startIdx, endIdx, t2.points, t2.startIdx, t2.endIdx, JOIN_SPLIT_THRESHOLD_M);
+  const graph = await computeMergeGraph(points, startIdx, endIdx, t2.points, t2.startIdx, t2.endIdx);
 
-  const crossings = clusters.map((c, k) => {
-    const j2 = nearestIndexIn(t2.points, c.lat, c.lon, t2.startIdx, t2.endIdx);
-    return {id: 'X'+k, lat: c.lat, lon: c.lon, i1: c.i1, j2};
-  });
-  mergeState.crossings = crossings;
-
-  if(crossings.length === 0){
+  if(!graph){
+    mergeState.crossings = [];
     mergeState.segments = [];
-    showMergeInfoBanner("Les 2 parcours ne se croisent plus dans la zone sélectionnée : ajustez les repères de départ/arrivée, ou annulez la fusion.");
+    showMergeInfoBanner(`Les 2 parcours ne se croisent plus, et leurs extrémités sont à plus de ${VIRTUAL_CROSSING_MAX_DIST_M} m l'une de l'autre : ajustez les repères de départ/arrivée, ou annulez la fusion.`);
     renderMergeUI();
     return;
   }
 
-  const cuts1 = crossings.map(c => ({idx: c.i1, nodeId: c.id}));
-  const cuts2 = crossings.map(c => ({idx: c.j2, nodeId: c.id}));
-  mergeState.segments = [
-    ...buildTrackSegments(1, startIdx, endIdx, cuts1),
-    ...buildTrackSegments(2, t2.startIdx, t2.endIdx, cuts2)
-  ];
+  mergeState.crossings = graph.crossings;
+  mergeState.segments = graph.segments;
   renderMergeUI();
   updateMergeCard();
+  checkMergeCompletion();
+  if(graph.bridged){
+    showMergeInfoBanner(
+      graph.routed
+        ? "Les 2 parcours ne se croisent pas : leurs extrémités proches ont été reliées par un itinéraire piéton."
+        : "Les 2 parcours ne se croisent pas : leurs extrémités proches ont été reliées par une ligne droite (itinéraire indisponible).",
+      6000
+    );
+  }
 }
 
-function buildTrackSegments(trackNum, lo, hi, cutList){
-  const dNode = trackNum === 1 ? 'D1' : 'D2';
-  const aNode = trackNum === 1 ? 'A1' : 'A2';
+function buildTrackSegments(trackNum, lo, hi, cutList, startNodeOverride, endNodeOverride){
+  const dNode = startNodeOverride || (trackNum === 1 ? 'D1' : 'D2');
+  const aNode = endNodeOverride || (trackNum === 1 ? 'A1' : 'A2');
   const cuts = [{idx: lo, nodeId: dNode}, ...cutList, {idx: hi, nodeId: aNode}]
     .sort((a,b) => a.idx - b.idx);
   const segs = [];
@@ -1617,8 +1725,11 @@ function renderMergeUI(){
   layers.segPolylines = {};
   const coordMap = crossingCoordMap();
   mergeState.segments.filter(s => !s.deleted).forEach(seg => {
-    const src = seg.track === 1 ? points : t2.points;
-    const latlngs = src.slice(seg.i0, seg.i1+1).map(p => [p.lat, p.lon]);
+    const isConnector = seg.track === 'connector';
+    const src = seg.track === 1 ? points : seg.track === 2 ? t2.points : null;
+    const latlngs = isConnector
+      ? seg.points.map(p => [p.lat, p.lon])
+      : src.slice(seg.i0, seg.i1+1).map(p => [p.lat, p.lon]);
     // Accroche visuellement les 2 extrémités du tronçon sur la coordonnée
     // canonique du croisement, si elles en touchent un : les tronçons
     // restants se rejoignent alors sans décalage dès qu'on supprime un
@@ -1626,11 +1737,12 @@ function renderMergeUI(){
     if(coordMap[seg.nodeStart]) latlngs[0] = [coordMap[seg.nodeStart].lat, coordMap[seg.nodeStart].lon];
     if(coordMap[seg.nodeEnd]) latlngs[latlngs.length - 1] = [coordMap[seg.nodeEnd].lat, coordMap[seg.nodeEnd].lon];
     const selected = mergeState.selectedSegId === seg.id;
-    const baseColor = seg.track === 1 ? '#2E4A38' : '#3C6E8F';
+    const baseColor = isConnector ? '#9C6B30' : (seg.track === 1 ? '#2E4A38' : '#3C6E8F');
     const poly = L.polyline(latlngs, {
       color: selected ? '#111' : baseColor,
       weight: selected ? 8 : 5,
-      opacity: .95, lineCap: 'round'
+      opacity: .95, lineCap: 'round',
+      dashArray: isConnector ? '2 8' : null
     }).addTo(map);
     poly.on('click', e => { L.DomEvent.stopPropagation(e); selectMergeSegment(seg.id, e.latlng); });
     layers.segPolylines[seg.id] = poly;
@@ -1868,8 +1980,11 @@ function finalizeMerge(remaining, endNodes){
 
   let newPoints = [];
   ordered.forEach(({seg, reversed}, idx) => {
-    const src = seg.track === 1 ? points : t2.points;
-    let slice = src.slice(seg.i0, seg.i1+1).map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
+    const isConnector = seg.track === 'connector';
+    const src = seg.track === 1 ? points : seg.track === 2 ? t2.points : null;
+    let slice = isConnector
+      ? seg.points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}))
+      : src.slice(seg.i0, seg.i1+1).map(p => ({lat:p.lat, lon:p.lon, ele:p.ele}));
     if(reversed) slice = slice.reverse();
     if(idx > 0){
       const entryNode = reversed ? seg.nodeEnd : seg.nodeStart;
