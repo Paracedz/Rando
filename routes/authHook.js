@@ -22,19 +22,36 @@ const { magicLinkEmail } = require('../lib/emailTemplates');
 
 const router = express.Router();
 
+function decodeSecretKey(rawSecret) {
+  // Le secret affiché par Supabase peut être copié sous 2 formes selon
+  // l'endroit où on le récupère : "v1,whsec_XXXX" (avec le préfixe de
+  // version) ou juste "whsec_XXXX". On gère les deux, dans n'importe quel
+  // ordre, pour ne pas dépendre de la façon exacte dont il a été copié.
+  let s = String(rawSecret || '').trim();
+  if (s.startsWith('v1,')) s = s.slice(3);
+  if (s.startsWith('whsec_')) s = s.slice(6);
+  return Buffer.from(s, 'base64');
+}
+
 function verifySupabaseWebhook(rawBody, headers, secret) {
   const id = headers['webhook-id'];
   const timestamp = headers['webhook-timestamp'];
   const signatureHeader = headers['webhook-signature'];
-  if (!id || !timestamp || !signatureHeader || !secret) return false;
 
-  // Le secret donné par Supabase est préfixé "whsec_" — on ne garde que
-  // la partie encodée en base64 pour reconstruire la clé HMAC.
-  const secretKey = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+  if (!secret) {
+    console.error('[send-email-hook] SEND_EMAIL_HOOK_SECRET manquant côté serveur.');
+    return false;
+  }
+  if (!id || !timestamp || !signatureHeader) {
+    console.error('[send-email-hook] En-têtes webhook-id/webhook-timestamp/webhook-signature manquants.', Object.keys(headers));
+    return false;
+  }
+
   let secretBytes;
   try {
-    secretBytes = Buffer.from(secretKey, 'base64');
-  } catch {
+    secretBytes = decodeSecretKey(secret);
+  } catch (err) {
+    console.error('[send-email-hook] Secret illisible (base64 invalide) :', err.message);
     return false;
   }
 
@@ -43,7 +60,7 @@ function verifySupabaseWebhook(rawBody, headers, secret) {
 
   // L'en-tête peut contenir plusieurs signatures espacées ("v1,xxx v1,yyy") :
   // une seule doit correspondre.
-  return signatureHeader.split(' ').some((part) => {
+  const matched = signatureHeader.split(' ').some((part) => {
     const sig = part.split(',')[1];
     if (!sig) return false;
     try {
@@ -52,6 +69,11 @@ function verifySupabaseWebhook(rawBody, headers, secret) {
       return false; // longueurs différentes = non concordant, pas une erreur à propager
     }
   });
+
+  if (!matched) {
+    console.error('[send-email-hook] Signature non concordante — vérifie SEND_EMAIL_HOOK_SECRET dans Vercel (et redéploie après toute modification).');
+  }
+  return matched;
 }
 
 router.post(
@@ -101,6 +123,7 @@ router.post(
     try {
       await sendEmail({ to: friendEmail, subject: 'Ton lien de connexion Traceur', text, html });
     } catch (err) {
+      console.error('[send-email-hook] Échec de sendEmail :', err.message);
       // Supabase réessaiera automatiquement si on répond en erreur.
       return res.status(500).json({ error: err.message });
     }
