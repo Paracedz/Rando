@@ -881,8 +881,52 @@ document.getElementById('closeLegalBtn').addEventListener('click', () => {
   document.getElementById('legalOverlay').style.display = 'none';
 });
 
+document.getElementById('openContactBtn').addEventListener('click', () => {
+  document.getElementById('aboutOverlay').style.display = 'none';
+  document.getElementById('contactMessageInput').value = '';
+  const statusEl = document.getElementById('contactStatusMsg');
+  statusEl.style.display = 'none';
+  statusEl.className = '';
+  document.getElementById('contactOverlay').style.display = 'flex';
+});
+document.getElementById('contactCancelBtn').addEventListener('click', () => {
+  document.getElementById('contactOverlay').style.display = 'none';
+});
+document.getElementById('contactSendBtn').addEventListener('click', async () => {
+  const message = document.getElementById('contactMessageInput').value.trim();
+  const statusEl = document.getElementById('contactStatusMsg');
+  if(!message){
+    statusEl.textContent = 'Écris un message avant d\'envoyer.';
+    statusEl.className = 'err';
+    statusEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('contactSendBtn');
+  btn.disabled = true;
+  statusEl.style.display = 'none';
+  try{
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message})
+    });
+    const body = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(body.error || 'Échec de l\'envoi');
+    statusEl.textContent = 'Message envoyé, merci !';
+    statusEl.className = 'ok';
+    statusEl.style.display = 'block';
+    setTimeout(() => { document.getElementById('contactOverlay').style.display = 'none'; }, 1800);
+  }catch(err){
+    statusEl.textContent = 'Erreur : ' + err.message;
+    statusEl.className = 'err';
+    statusEl.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 // Clic sur le fond (hors de la boîte) : ferme la popin, comme les autres modales.
-[['aboutOverlay'], ['helpOverlay'], ['legalOverlay']].forEach(([id]) => {
+[['aboutOverlay'], ['helpOverlay'], ['legalOverlay'], ['contactOverlay']].forEach(([id]) => {
   document.getElementById(id).addEventListener('click', (e) => {
     if(e.target.id === id) document.getElementById(id).style.display = 'none';
   });

@@ -84,6 +84,8 @@
   #shareStatusMsg{ font-size:12px; margin-top:10px; display:none; }
   #shareStatusMsg.ok{ color:#1F7A4D; }
   #shareStatusMsg.err{ color:#A5432E; }
+  #contactStatusMsg.ok{ color:#1F7A4D; }
+  #contactStatusMsg.err{ color:#A5432E; }
 
   #aboutOverlay .modal-box{ max-width:320px; text-align:center; }
   #aboutOverlay img{ width:64px; height:64px; border-radius:14px; margin-bottom:10px; }
@@ -232,7 +234,22 @@
       <div class="actions">
         <button class="btn btn-outline" id="openHelpBtn">📖 Aide</button>
         <button class="btn btn-outline" id="openLegalBtn">⚖️ Mentions légales</button>
+        <button class="btn btn-outline" id="openContactBtn">✉️ Nous contacter</button>
         <button class="btn btn-outline" id="closeAboutBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nous contacter -->
+  <div class="modal-overlay" id="contactOverlay">
+    <div class="modal-box">
+      <h3>✉️ Nous contacter</h3>
+      <p>Une question, un bug, une suggestion ? Écris-nous directement.</p>
+      <textarea id="contactMessageInput" maxlength="3000" rows="6" placeholder="Ton message…" style="width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; font:inherit; font-size:13.5px; resize:vertical;"></textarea>
+      <div id="contactStatusMsg" style="font-size:12px; margin-top:10px; display:none;"></div>
+      <div class="actions" style="margin-top:14px;">
+        <button class="btn btn-primary" id="contactSendBtn">Envoyer</button>
+        <button class="btn btn-outline" id="contactCancelBtn">Annuler</button>
       </div>
     </div>
   </div>
