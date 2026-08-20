@@ -855,6 +855,39 @@ document.getElementById('fileInput').addEventListener('change', e => {
   }
 })();
 
+/* ============================================================
+   À PROPOS / AIDE / MENTIONS LÉGALES
+   ============================================================ */
+document.getElementById('aboutBtn').addEventListener('click', () => {
+  document.getElementById('aboutOverlay').style.display = 'flex';
+});
+document.getElementById('closeAboutBtn').addEventListener('click', () => {
+  document.getElementById('aboutOverlay').style.display = 'none';
+});
+
+document.getElementById('openHelpBtn').addEventListener('click', () => {
+  document.getElementById('aboutOverlay').style.display = 'none';
+  document.getElementById('helpOverlay').style.display = 'flex';
+});
+document.getElementById('closeHelpBtn').addEventListener('click', () => {
+  document.getElementById('helpOverlay').style.display = 'none';
+});
+
+document.getElementById('openLegalBtn').addEventListener('click', () => {
+  document.getElementById('aboutOverlay').style.display = 'none';
+  document.getElementById('legalOverlay').style.display = 'flex';
+});
+document.getElementById('closeLegalBtn').addEventListener('click', () => {
+  document.getElementById('legalOverlay').style.display = 'none';
+});
+
+// Clic sur le fond (hors de la boîte) : ferme la popin, comme les autres modales.
+[['aboutOverlay'], ['helpOverlay'], ['legalOverlay']].forEach(([id]) => {
+  document.getElementById(id).addEventListener('click', (e) => {
+    if(e.target.id === id) document.getElementById(id).style.display = 'none';
+  });
+});
+
 /* Le dossier "base-gpx" est listé automatiquement au démarrage. Une page web
    ne peut pas parcourir le disque toute seule : on va donc chercher, via
    fetch(), soit un petit manifeste base-gpx/manifest.json (["etape1.gpx", ...]),

@@ -70,7 +70,6 @@
   .menu-panel-right{ left:auto; right:0; }
   .account-panel-name{ display:block; font-weight:700; color:#1F3527; font-size:13.5px; }
   .account-panel-email{ display:block; color:#4B5A50; font-size:12px; margin-top:2px; }
-  .account-panel-version{ display:block; color:#9AA69B; font-size:10.5px; margin-top:4px; font-family:'IBM Plex Mono',monospace; }
 
   #premiumLockOverlay .modal-box{ max-width:320px; text-align:center; }
   #premiumLockOverlay .premium-diamond{ font-size:32px; display:block; margin-bottom:8px; }
@@ -85,6 +84,31 @@
   #shareStatusMsg{ font-size:12px; margin-top:10px; display:none; }
   #shareStatusMsg.ok{ color:#1F7A4D; }
   #shareStatusMsg.err{ color:#A5432E; }
+
+  #aboutOverlay .modal-box{ max-width:320px; text-align:center; }
+  #aboutOverlay img{ width:64px; height:64px; border-radius:14px; margin-bottom:10px; }
+  #aboutOverlay .about-version{ color:#4B5A50; font-size:12.5px; font-family:'IBM Plex Mono',monospace; margin-bottom:18px; }
+  #aboutOverlay .actions{ display:flex; flex-direction:column; gap:8px; }
+
+  .info-modal .modal-box{
+    max-width:560px; max-height:80vh; overflow-y:auto; text-align:left;
+  }
+  .info-modal .modal-box h3{ margin-bottom:14px; }
+  .info-modal .modal-box h4{
+    font-family:'Fraunces',serif; font-size:14.5px; color:var(--forest-deep);
+    margin:18px 0 6px;
+  }
+  .info-modal .modal-box h4:first-of-type{ margin-top:0; }
+  .info-modal .modal-box p, .info-modal .modal-box li{
+    font-size:13px; line-height:1.6; color:var(--ink-soft); margin:0 0 8px;
+  }
+  .info-modal .modal-box ul{ margin:0 0 10px; padding-left:20px; }
+  .info-modal .modal-box strong{ color:var(--ink); }
+  .info-modal .modal-box .disclaimer{
+    margin-top:18px; padding-top:12px; border-top:1px solid var(--line);
+    font-size:11.5px; color:#93a094; font-style:italic;
+  }
+  .info-modal .modal-box .actions{ margin-top:18px; }
 
   /* Bouton hamburger : masqué sur grand écran, le header desktop suffit. */
   #mobileMenuBtn{
@@ -203,6 +227,93 @@
     </div>
   </div>
 
+  <!-- À propos -->
+  <div class="modal-overlay" id="aboutOverlay">
+    <div class="modal-box">
+      <img src="/icons/icon-192.png" alt="Traceur">
+      <h3 style="margin-bottom:2px;">Traceur</h3>
+      <div class="about-version">v__APP_VERSION__</div>
+      <div class="actions">
+        <button class="btn btn-outline" id="openHelpBtn">📖 Aide</button>
+        <button class="btn btn-outline" id="openLegalBtn">⚖️ Mentions légales</button>
+        <button class="btn btn-outline" id="closeAboutBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aide -->
+  <div class="modal-overlay info-modal" id="helpOverlay">
+    <div class="modal-box">
+      <h3>📖 Aide</h3>
+
+      <h4>À quoi sert Traceur</h4>
+      <p>Traceur est fait pour <strong>préparer tes étapes sur des parcours déjà existants</strong> (un GR, une trace partagée par quelqu'un…) — pas pour créer un itinéraire à partir de rien sur la carte. Tu pars toujours d'un fichier GPX, celui d'un tracé qui existe déjà.</p>
+      <p>Ceci dit, tu n'es pas obligé de le suivre tel quel : une fois le tracé chargé, tu peux recadrer le départ et l'arrivée, l'inverser, ou ajuster le découpage en étapes selon tes propres distances et rythme.</p>
+
+      <h4>Choisir ou charger un parcours</h4>
+      <p>Le menu <strong>Parcours</strong> permet de choisir un tracé dans la liste proposée, ou d'en charger un depuis ton propre fichier GPX (réservé aux membres Premium).</p>
+
+      <h4>Fusionner 2 parcours</h4>
+      <p>Le menu <strong>Avancé</strong> permet d'ajouter un 2ᵉ fichier GPX pour le fusionner avec le premier, afin d'obtenir un seul tracé continu — pratique pour enchaîner 2 sentiers qui se rejoignent, avant de découper le tout en étapes. Traceur détecte automatiquement les points où les 2 tracés se croisent (ou passent très près l'un de l'autre) ; si plusieurs chemins sont possibles à un croisement, tu choisis lequel garder en supprimant les tronçons en trop sur la carte.</p>
+      <p>Si les 2 tracés ne se croisent pas du tout mais que leurs extrémités sont proches (moins de 500 m), Traceur les relie automatiquement par un itinéraire piéton.</p>
+
+      <h4>Sauvegarder et partager</h4>
+      <p>Le menu <strong>Parcours</strong> permet de sauvegarder l'état actuel de ta préparation : elle reste liée à ton compte, accessible depuis n'importe quel appareil. Depuis le menu <strong>Sauvegardes</strong>, chaque sauvegarde peut être reprise, supprimée, ou <strong>partagée par email à un ami</strong> — une copie est alors créée sur son propre compte (créé automatiquement s'il n'en a pas encore).</p>
+
+      <h4>Compte gratuit vs Premium</h4>
+      <p>Options disponibles pour <strong>tous les comptes</strong> :</p>
+      <ul>
+        <li>Choisir un parcours dans la liste proposée</li>
+        <li>Téléchargement du parcours (complet ou par étape)</li>
+        <li>Sauvegardes (création, reprise, suppression, partage à un ami)</li>
+        <li>Découpage en étapes, inversion du sens, réinitialisation, annulation</li>
+      </ul>
+      <p>Options réservées aux comptes <strong>Premium</strong> (marquées d'un 💎) :</p>
+      <ul>
+        <li>Charger son propre fichier GPX</li>
+        <li>Ajouter un 2ᵉ GPX pour fusionner 2 parcours</li>
+        <li>Rechercher les points d'intérêt à proximité (eau, boulangeries, toilettes)</li>
+        <li>Déplacer le point départ/arrivée sur un parcours en boucle</li>
+      </ul>
+
+      <div class="actions">
+        <button class="btn btn-outline" id="closeHelpBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mentions légales -->
+  <div class="modal-overlay info-modal" id="legalOverlay">
+    <div class="modal-box">
+      <h3>⚖️ Mentions légales</h3>
+
+      <h4>Connexion et mots de passe</h4>
+      <p>Traceur ne demande ni ne stocke <strong>aucun mot de passe</strong>. La connexion se fait uniquement via Google, Facebook, ou un lien de connexion à usage unique envoyé par email ("lien magique") — c'est Google, Facebook ou notre prestataire d'authentification (Supabase) qui vérifient ton identité, jamais Traceur directement.</p>
+
+      <h4>Cookies</h4>
+      <p>Un seul cookie est utilisé : un cookie de session <strong>strictement nécessaire</strong> au fonctionnement de la connexion (il prouve que tu es bien connecté à chaque page que tu ouvres). Il est technique, "httpOnly" (illisible par un script), et n'est ni un cookie publicitaire ni un cookie de mesure d'audience. Aucun consentement préalable n'est requis pour ce type de cookie strictement nécessaire, mais tu peux le supprimer à tout moment en te déconnectant ou en vidant les cookies de ton navigateur.</p>
+
+      <h4>Données stockées</h4>
+      <p>Les données suivantes sont conservées, liées à ton compte :</p>
+      <ul>
+        <li>Adresse email, nom, prénom et photo de profil (transmis par Google/Facebook lors de la connexion)</li>
+        <li>Les parcours que tu sauvegardes (tracés GPX, découpage en étapes)</li>
+        <li>Ton statut d'abonnement (gratuit ou Premium)</li>
+      </ul>
+      <p>Ces données sont hébergées chez <strong>Supabase</strong> (base de données) et <strong>Vercel</strong> (hébergement de l'application). Les recherches de points d'intérêt passent par <strong>OpenStreetMap/Overpass</strong>, et certains calculs d'itinéraire par un service public communautaire basé sur <strong>OSRM</strong> — ces services publics reçoivent les coordonnées géographiques nécessaires à la requête, sans donnée d'identification. Le partage de sauvegarde envoie un email via <strong>Resend</strong>.</p>
+      <p>Aucune donnée n'est vendue ni partagée à des fins publicitaires. Il n'y a pas de traceur publicitaire ni de mesure d'audience tierce sur Traceur.</p>
+
+      <h4>Tes droits</h4>
+      <p>Conformément au RGPD, tu peux demander l'accès, la rectification ou la suppression de tes données à tout moment en contactant l'éditeur de l'application.</p>
+
+      <div class="disclaimer">Ces mentions ont pour but d'expliquer simplement et honnêtement le fonctionnement de l'application. Elles ne constituent pas un avis juridique formel — Traceur étant un projet personnel, ce texte gagnera à être relu par un professionnel avant toute mise à disposition à grande échelle.</div>
+
+      <div class="actions">
+        <button class="btn btn-outline" id="closeLegalBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <div id="poiLoadingPopin" class="poi-loading-popin" style="display:none">
     <div class="poi-loading-box">
       <div class="poi-loading-spinner"></div>
@@ -272,8 +383,9 @@
         <div class="menu-block" style="padding-bottom:8px;">
           <span class="account-panel-name">__USER_FULL_NAME__</span>
           <span class="account-panel-email">__USER_EMAIL__</span>
-          <span class="account-panel-version">v__APP_VERSION__</span>
         </div>
+        <div class="menu-sep"></div>
+        <button class="menu-action" id="aboutBtn"><span>ℹ️ À propos</span></button>
         <div class="menu-sep"></div>
         <button class="menu-action" id="logoutBtn"><span>🚪 Se déconnecter</span></button>
       </div>
