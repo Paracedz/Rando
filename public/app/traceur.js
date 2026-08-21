@@ -934,16 +934,18 @@ document.getElementById('contactSendBtn').addEventListener('click', async () => 
 
 /* Le dossier "base-gpx" est listé automatiquement au démarrage. Une page web
    ne peut pas parcourir le disque toute seule : on va donc chercher, via
-   fetch(), soit un petit manifeste base-gpx/manifest.json (["etape1.gpx", ...]),
-   soit — à défaut — la page de listing que génèrent la plupart des serveurs
-   web statiques pour un dossier (ex. `python -m http.server`). Cela ne
-   fonctionne que si la page est servie via http(s) (pas en double-cliquant
-   sur le fichier), ce qui est indiqué à l'utilisateur si rien n'est trouvé. */
-let baseGpxNames = [];
+   fetch(), un petit manifeste par catégorie — base-gpx/manifest.json pour
+   les randonnées à pied, base-gpx/manifest-velo.json pour le vélo — soit,
+   à défaut, la page de listing que génèrent la plupart des serveurs web
+   statiques pour un dossier (ex. `python -m http.server`), auquel cas tout
+   est classé "à pied" faute de pouvoir deviner le type. */
+let baseGpxCatalog = []; // [{name, file, type: 'foot'|'bike'}]
+let selectedRoute = null;
+let activeRouteType = 'foot';
 
-async function fetchManifestNames(){
+async function fetchManifestNames(url){
   try{
-    const res = await fetch('/base-gpx/manifest.json', {cache:'no-store'});
+    const res = await fetch(url, {cache:'no-store'});
     if(!res.ok) return null;
     const data = await res.json();
     if(Array.isArray(data)) return data.filter(n => /\.gpx$/i.test(n));
@@ -966,46 +968,105 @@ async function fetchDirectoryListingNames(){
 }
 
 async function loadBaseGpxList(){
-  const sel = document.getElementById('baseGpxSelect');
-  const prepareBtn = document.getElementById('prepareStepsBtn');
   const hint = document.getElementById('baseGpxHint');
+  const chooseBtn = document.getElementById('chooseRouteBtn');
 
-  let names = await fetchManifestNames();
-  if(!names) names = await fetchDirectoryListingNames();
+  const [footNames, bikeNames] = await Promise.all([
+    fetchManifestNames('/base-gpx/manifest.json'),
+    fetchManifestNames('/base-gpx/manifest-velo.json'),
+  ]);
 
-  if(!names || names.length === 0){
-    sel.innerHTML = '<option value="">Aucun fichier trouvé dans base-gpx/</option>';
-    sel.disabled = true;
-    prepareBtn.disabled = true;
+  let catalog = [
+    ...(footNames || []).map(n => ({name: n, file: n, type: 'foot'})),
+    ...(bikeNames || []).map(n => ({name: n, file: n, type: 'bike'})),
+  ];
+
+  if(catalog.length === 0){
+    const fallback = await fetchDirectoryListingNames();
+    if(fallback) catalog = fallback.map(n => ({name: n, file: n, type: 'foot'}));
+  }
+
+  if(catalog.length === 0){
+    chooseBtn.disabled = true;
     hint.style.display = 'inline';
-    hint.innerHTML = "Rien trouvé automatiquement : servez la page via un serveur local (ex. <code>python -m http.server</code> depuis le dossier contenant <code>base-gpx/</code>), ou ajoutez <code>base-gpx/manifest.json</code> listant vos fichiers.";
+    hint.innerHTML = "Rien trouvé automatiquement : servez la page via un serveur local (ex. <code>python -m http.server</code> depuis le dossier contenant <code>base-gpx/</code>), ou ajoutez <code>base-gpx/manifest.json</code>/<code>manifest-velo.json</code> listant vos fichiers.";
     return;
   }
 
-  names = [...new Set(names)].sort((a,b) => a.localeCompare(b, 'fr'));
-  baseGpxNames = names;
+  catalog.sort((a,b) => a.name.localeCompare(b.name, 'fr'));
+  baseGpxCatalog = catalog;
   hint.style.display = 'none';
-  sel.innerHTML = '';
-  names.forEach((n, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = n.replace(/\.gpx$/i, '');
-    sel.appendChild(opt);
-  });
-  sel.disabled = false;
-  prepareBtn.disabled = false;
+  chooseBtn.disabled = false;
 }
 loadBaseGpxList();
 fetchSavedRoutesList();
 
-document.getElementById('prepareStepsBtn').addEventListener('click', async () => {
-  const idx = parseInt(document.getElementById('baseGpxSelect').value, 10);
-  const name = baseGpxNames[idx];
-  if(!name) return;
+/* ---- popin "Choisir un parcours" ---- */
+function routeDisplayName(entry){ return entry.name.replace(/\.gpx$/i, '').replace(/[-_]+/g, ' '); }
+
+function renderRouteResults(){
+  const list = document.getElementById('routeResultsList');
+  const empty = document.getElementById('routeResultsEmpty');
+  const query = document.getElementById('routeSearchInput').value.trim().toLowerCase();
+
+  const results = baseGpxCatalog.filter(entry => {
+    if(entry.type !== activeRouteType) return false;
+    if(!query) return true;
+    return routeDisplayName(entry).toLowerCase().includes(query);
+  });
+
+  list.innerHTML = '';
+  empty.style.display = results.length === 0 ? 'block' : 'none';
+  results.forEach(entry => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'route-result-row';
+    if(selectedRoute && selectedRoute.file === entry.file) row.classList.add('selected');
+    row.textContent = routeDisplayName(entry);
+    row.addEventListener('click', () => {
+      selectedRoute = entry;
+      document.getElementById('importRouteBtn').disabled = false;
+      renderRouteResults();
+    });
+    list.appendChild(row);
+  });
+}
+
+function openChooseRouteModal(){
+  selectedRoute = null;
+  document.getElementById('importRouteBtn').disabled = true;
+  document.getElementById('routeSearchInput').value = '';
+  renderRouteResults();
+  document.getElementById('chooseRouteOverlay').style.display = 'flex';
+}
+document.getElementById('chooseRouteBtn').addEventListener('click', openChooseRouteModal);
+document.getElementById('closeChooseRouteBtn').addEventListener('click', () => {
+  document.getElementById('chooseRouteOverlay').style.display = 'none';
+});
+document.getElementById('chooseRouteOverlay').addEventListener('click', (e) => {
+  if(e.target.id === 'chooseRouteOverlay') document.getElementById('chooseRouteOverlay').style.display = 'none';
+});
+
+[['routeTypeFootBtn','foot'], ['routeTypeBikeBtn','bike']].forEach(([id, type]) => {
+  document.getElementById(id).addEventListener('click', () => {
+    activeRouteType = type;
+    document.getElementById('routeTypeFootBtn').classList.toggle('active', type === 'foot');
+    document.getElementById('routeTypeBikeBtn').classList.toggle('active', type === 'bike');
+    selectedRoute = null;
+    document.getElementById('importRouteBtn').disabled = true;
+    renderRouteResults();
+  });
+});
+
+document.getElementById('routeSearchInput').addEventListener('input', renderRouteResults);
+
+document.getElementById('importRouteBtn').addEventListener('click', async () => {
+  if(!selectedRoute) return;
   try{
-    const res = await fetch('/base-gpx/' + encodeURIComponent(name), {cache:'no-store'});
-    if(!res.ok) throw new Error(`Impossible de charger "base-gpx/${name}".`);
+    const res = await fetch('/base-gpx/' + encodeURIComponent(selectedRoute.file), {cache:'no-store'});
+    if(!res.ok) throw new Error(`Impossible de charger "base-gpx/${selectedRoute.file}".`);
     const text = await res.text();
+    document.getElementById('chooseRouteOverlay').style.display = 'none';
     handleGpxText(text);
   }catch(err){
     alert('Erreur : ' + err.message);
@@ -2109,7 +2170,7 @@ function exitMergeMode(){
 }
 
 function setMergeControlsDisabled(disabled){
-  ['reverseBtn','resetBtn','saveStateBtn','prepareStepsBtn','baseGpxSelect','splitBtn','segCount'].forEach(id => {
+  ['reverseBtn','resetBtn','saveStateBtn','chooseRouteBtn','splitBtn','segCount'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.disabled = disabled;
   });
