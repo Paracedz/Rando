@@ -87,27 +87,34 @@
   #contactStatusMsg.ok{ color:#1F7A4D; }
   #contactStatusMsg.err{ color:#A5432E; }
 
-  .route-picker-box{ max-width:440px; text-align:left; }
-  .route-type-tabs{ display:flex; border:1.5px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:12px; }
+  .route-picker-box{
+    max-width:440px; width:440px; height:560px; text-align:left;
+    display:flex; flex-direction:column;
+  }
+  .route-type-tabs{ display:flex; border:1.5px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:12px; flex-shrink:0; }
   .route-type-tab{
     flex:1; background:transparent; border:none; cursor:pointer;
     padding:9px 8px; font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-soft);
   }
   .route-type-tab.active{ background:var(--forest-deep); color:#fff; }
   #routeSearchInput{
-    width:100%; box-sizing:border-box; padding:9px 12px; margin-bottom:10px;
+    width:100%; box-sizing:border-box; padding:9px 12px; margin-bottom:10px; flex-shrink:0;
     border:1.5px solid var(--line); border-radius:8px; font:inherit; font-size:13.5px;
   }
-  .route-results-list{ max-height:260px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; }
+  .route-results-wrap{ flex:1; min-height:0; border:1px solid var(--line); border-radius:8px; overflow-y:auto; }
   .route-result-row{
     display:block; width:100%; text-align:left; background:transparent; border:none;
-    border-bottom:1px solid var(--line); padding:10px 12px; font:inherit; font-size:13.5px;
+    border-bottom:1px solid var(--line); padding:12px; font:inherit; font-size:13.5px;
     color:var(--ink); cursor:pointer;
   }
   .route-result-row:last-child{ border-bottom:none; }
   .route-result-row:hover{ background:#F1ECDD; }
   .route-result-row.selected{ background:var(--forest-deep); color:#fff; font-weight:600; }
   .route-results-empty{ padding:16px 4px; text-align:center; color:var(--ink-soft); font-size:13px; }
+  .route-picker-box .actions{ flex-shrink:0; }
+  .route-picker-box .menu-sep{ flex-shrink:0; margin:12px 0; }
+
+  [data-premium].premium-locked{ opacity:.55; cursor:not-allowed; }
 
   #aboutOverlay .modal-box{ max-width:320px; text-align:center; }
   #aboutOverlay img{ width:64px; height:64px; border-radius:14px; margin-bottom:10px; }
@@ -303,8 +310,12 @@
 
       <input type="search" id="routeSearchInput" placeholder="Rechercher un parcours par nom…" autocomplete="off">
 
-      <div id="routeResultsList" class="route-results-list"></div>
-      <div id="routeResultsEmpty" class="route-results-empty" style="display:none;">Aucun parcours ne correspond à cette recherche.</div>
+      <div id="routeResultsList" class="route-results-wrap"></div>
+
+      <div class="menu-sep"></div>
+      <label class="btn btn-outline" for="fileInput" data-premium id="chooseRoutePersonalImportBtn" style="display:flex; align-items:center; justify-content:center; gap:6px;">
+        <span>⤒ Importer mon parcours perso</span><span class="premium-flag" data-premium-flag>💎</span>
+      </label>
 
       <div class="actions" style="margin-top:14px;">
         <button class="btn btn-primary" id="importRouteBtn" disabled>Importer le parcours</button>
@@ -406,7 +417,7 @@
         <span class="base-gpx-hint" id="baseGpxHint" style="display:none"></span>
         <div class="menu-sep"></div>
         <label class="menu-action" for="fileInput" data-premium>
-          <span>⤒ Importer mon parcours</span><span class="premium-flag" data-premium-flag>💎</span>
+          <span>⤒ Importer mon parcours perso</span><span class="premium-flag" data-premium-flag>💎</span>
         </label>
         <input type="file" id="fileInput" accept=".gpx" style="display:none" />
         <button class="menu-action" id="reverseBtn" disabled><span>⇄ Inverser le sens</span></button>

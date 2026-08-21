@@ -840,6 +840,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
   if(isPremium){
     document.querySelectorAll('[data-premium-flag]').forEach(el => el.remove());
   } else {
+    document.querySelectorAll('[data-premium]').forEach(el => el.classList.add('premium-locked'));
     const overlay = document.getElementById('premiumLockOverlay');
     document.getElementById('closePremiumLockBtn').addEventListener('click', () => {
       overlay.style.display = 'none';
@@ -998,7 +999,12 @@ async function loadBaseGpxList(){
   hint.style.display = 'none';
   chooseBtn.disabled = false;
 }
-loadBaseGpxList();
+loadBaseGpxList().then(() => {
+  // Ouvre directement la popin "Choisir un parcours" au démarrage, tant
+  // qu'aucun tracé n'est déjà chargé (ex. reprise d'une sauvegarde via un
+  // lien direct, cas rare mais à ne pas écraser).
+  if(points.length === 0) openChooseRouteModal();
+});
 fetchSavedRoutesList();
 
 /* ---- popin "Choisir un parcours" ---- */
@@ -1006,7 +1012,6 @@ function routeDisplayName(entry){ return entry.name.replace(/\.gpx$/i, '').repla
 
 function renderRouteResults(){
   const list = document.getElementById('routeResultsList');
-  const empty = document.getElementById('routeResultsEmpty');
   const query = document.getElementById('routeSearchInput').value.trim().toLowerCase();
 
   const results = baseGpxCatalog.filter(entry => {
@@ -1016,7 +1021,10 @@ function renderRouteResults(){
   });
 
   list.innerHTML = '';
-  empty.style.display = results.length === 0 ? 'block' : 'none';
+  if(results.length === 0){
+    list.innerHTML = '<div class="route-results-empty">Aucun parcours ne correspond à cette recherche.</div>';
+    return;
+  }
   results.forEach(entry => {
     const row = document.createElement('button');
     row.type = 'button';
@@ -1071,6 +1079,13 @@ document.getElementById('importRouteBtn').addEventListener('click', async () => 
   }catch(err){
     alert('Erreur : ' + err.message);
   }
+});
+
+// "Importer mon parcours perso" depuis cette popin : ferme la popin avant
+// que le sélecteur de fichier ne s'ouvre (n'est atteint que si premium —
+// sinon le verrouillage premium intercepte le clic avant nous).
+document.getElementById('chooseRoutePersonalImportBtn').addEventListener('click', () => {
+  document.getElementById('chooseRouteOverlay').style.display = 'none';
 });
 
 function enableUIAfterLoad(){
