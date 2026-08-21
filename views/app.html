@@ -129,6 +129,12 @@
     header.app-header .brand .tagline{ display:none; } /* une seule ligne : pas de place pour la sous-accroche */
     #mobileMenuBtn{ display:inline-flex; align-items:center; justify-content:center; order:-1; }
 
+    /* Échelle de distance (bas gauche de la carte) : déjà ajoutée en JS
+       pour toutes les tailles d'écran, on s'assure juste qu'elle reste
+       bien visible et lisible sur un petit écran. */
+    .leaflet-control-scale{ margin-bottom:10px !important; margin-left:8px !important; }
+    .leaflet-control-scale-line{ font-size:11px; }
+
     .main-menu, .account-cluster{ display:none; }
 
     body.mobile-nav-open{ overflow:hidden; } /* pas de scroll de la page derrière le tiroir ouvert */
@@ -264,10 +270,10 @@
       <p>Ceci dit, tu n'es pas obligé de le suivre tel quel : une fois le tracé chargé, tu peux recadrer le départ et l'arrivée, l'inverser, ou ajuster le découpage en étapes selon tes propres distances et rythme.</p>
 
       <h4>Choisir ou charger un parcours</h4>
-      <p>Le menu <strong>Parcours</strong> permet de choisir un tracé dans la liste proposée, ou d'en charger un depuis ton propre fichier GPX (réservé aux membres Premium).</p>
+      <p>Le menu <strong>Parcours</strong> permet de choisir un tracé dans la liste proposée, ou d'en importer un depuis ton propre fichier GPX (réservé aux membres Premium).</p>
 
       <h4>Fusionner 2 parcours</h4>
-      <p>Le menu <strong>Avancé</strong> permet d'ajouter un 2ᵉ fichier GPX pour le fusionner avec le premier, afin d'obtenir un seul tracé continu — pratique pour enchaîner 2 sentiers qui se rejoignent, avant de découper le tout en étapes. Traceur détecte automatiquement les points où les 2 tracés se croisent (ou passent très près l'un de l'autre) ; si plusieurs chemins sont possibles à un croisement, tu choisis lequel garder en supprimant les tronçons en trop sur la carte.</p>
+      <p>Le menu <strong>Avancé</strong> permet d'importer un 2ᵉ fichier GPX pour le fusionner avec le premier, afin d'obtenir un seul tracé continu — pratique pour enchaîner 2 sentiers qui se rejoignent, avant de découper le tout en étapes. Traceur détecte automatiquement les points où les 2 tracés se croisent (ou passent très près l'un de l'autre) ; si plusieurs chemins sont possibles à un croisement, tu choisis lequel garder en supprimant les tronçons en trop sur la carte.</p>
       <p>Si les 2 tracés ne se croisent pas du tout mais que leurs extrémités sont proches (moins de 500 m), Traceur les relie automatiquement par un itinéraire piéton.</p>
 
       <h4>Sauvegarder et partager</h4>
@@ -277,14 +283,14 @@
       <p>Options disponibles pour <strong>tous les comptes</strong> :</p>
       <ul>
         <li>Choisir un parcours dans la liste proposée</li>
-        <li>Téléchargement du parcours (complet ou par étape)</li>
+        <li>Export du parcours (complet ou par étape)</li>
         <li>Sauvegardes (création, reprise, suppression, partage à un ami)</li>
         <li>Découpage en étapes, inversion du sens, réinitialisation, annulation</li>
       </ul>
       <p>Options réservées aux comptes <strong>Premium</strong> (marquées d'un 💎) :</p>
       <ul>
-        <li>Charger son propre fichier GPX</li>
-        <li>Ajouter un 2ᵉ GPX pour fusionner 2 parcours</li>
+        <li>Importer son propre fichier GPX</li>
+        <li>Importer un 2ᵉ GPX pour fusionner 2 parcours</li>
         <li>Rechercher les points d'intérêt à proximité (eau, boulangeries, toilettes)</li>
         <li>Déplacer le point départ/arrivée sur un parcours en boucle</li>
       </ul>
@@ -353,12 +359,12 @@
         </div>
         <div class="menu-sep"></div>
         <label class="menu-action" for="fileInput" data-premium>
-          <span>⤒ Charger un GPX</span><span class="premium-flag" data-premium-flag>💎</span>
+          <span>⤒ Importer mon parcours</span><span class="premium-flag" data-premium-flag>💎</span>
         </label>
         <input type="file" id="fileInput" accept=".gpx" style="display:none" />
         <button class="menu-action" id="reverseBtn" disabled><span>⇄ Inverser le sens</span></button>
         <button class="menu-action" id="resetBtn" disabled><span>↺ Réinitialiser</span></button>
-        <button class="menu-action" id="downloadFullTrackBtn"><span>⇩ Télécharger mon parcours</span></button>
+        <button class="menu-action" id="downloadFullTrackBtn"><span>⇩ Exporter mon parcours</span></button>
         <button class="menu-action" id="undoBtn" disabled title="Annuler la dernière action"><span>↩ Annuler</span></button>
         <div class="menu-sep"></div>
         <button class="menu-action" id="saveStateBtn" disabled><span>💾 Sauvegarder l'état actuel</span></button>
@@ -368,7 +374,7 @@
     <div class="menu-item" id="menuAvanceItem">
       <button type="button" class="menu-trigger" id="menuAvanceBtn" aria-haspopup="true" aria-expanded="false">Avancé <span class="menu-caret">▾</span></button>
       <div class="menu-panel" id="menuAvancePanel">
-        <button class="menu-action" id="addGpxBtn" disabled data-premium><span>➕ Ajouter un GPX pour fusion</span><span class="premium-flag" data-premium-flag>💎</span></button>
+        <button class="menu-action" id="addGpxBtn" disabled data-premium><span>➕ Importer pour fusion</span><span class="premium-flag" data-premium-flag>💎</span></button>
         <button class="menu-action" id="findPoiBtn" disabled data-premium><span>🔎 Rechercher POI</span><span class="premium-flag" data-premium-flag>💎</span></button>
         <div id="loopActions" style="display:none">
           <button class="menu-action" id="loopModeBtn" data-premium><span>🔗 Déplacer le point Départ/Arrivée</span><span class="premium-flag" data-premium-flag>💎</span></button>
@@ -406,10 +412,10 @@
 
 <div class="modal-overlay" id="addGpxModalOverlay">
   <div class="modal-box">
-    <h3>Ajouter un 2ᵉ parcours GPX</h3>
+    <h3>Importer un 2ᵉ parcours</h3>
     <p>Ce 2ᵉ tracé doit croiser le parcours déjà chargé pour permettre la fusion en un seul parcours (un seul départ, une seule arrivée).</p>
     <div class="actions">
-      <label class="btn btn-primary" for="secondFileInput">⤒ Choisir un fichier GPX</label>
+      <label class="btn btn-primary" for="secondFileInput">⤒ Importer un fichier GPX</label>
       <input type="file" id="secondFileInput" accept=".gpx" />
       <button class="btn btn-outline" id="closeAddGpxModalBtn">Annuler</button>
     </div>
