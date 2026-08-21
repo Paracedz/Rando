@@ -187,6 +187,15 @@
       height:calc(110px + env(safe-area-inset-bottom, 0px));
       padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));
     }
+    /* Replié (bouton "⌄") : ne garder que la barre de titre, comme sur
+       desktop — sans ce correctif, la règle ci-dessus (avec !important)
+       gardait la zone à sa hauteur dépliée même une fois le graphique
+       masqué par .collapsed. */
+    .layout.map-expanded #elevWrap.collapsed{
+      height:34px !important;
+      height:calc(34px + env(safe-area-inset-bottom, 0px)) !important;
+      padding-bottom:0 !important;
+    }
 
     /* Cartes de la barre latérale ("Parcours", "Sauvegardes",
        "Découpage en jours"...) : beaucoup plus compactes. */
