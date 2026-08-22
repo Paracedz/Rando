@@ -14,7 +14,26 @@
 (function () {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        // Vérifie régulièrement s'il existe une nouvelle version (au
+        // retour au premier plan, et toutes les 60s tant que l'app reste
+        // ouverte) — sans ça, une PWA déjà ouverte ne revérifie quasiment
+        // jamais d'elle-même tant qu'on ne la ferme/rouvre pas.
+        setInterval(() => reg.update(), 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update();
+        });
+      }).catch(() => {});
+
+      // Dès qu'une nouvelle version prend le contrôle de la page (grâce à
+      // skipWaiting()/clients.claim() côté sw.js), on recharge tout seul —
+      // c'est ça qui évite d'avoir à fermer/rouvrir l'app manuellement.
+      let alreadyReloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (alreadyReloading) return;
+        alreadyReloading = true;
+        window.location.reload();
+      });
     });
   }
 

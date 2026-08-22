@@ -99,7 +99,14 @@ let mergeBannerTimeout = null;
    CARTE
    ============================================================ */
 function initMap(){
-  map = L.map('map', {zoomControl:true}).setView([45.75, 4.85], 6);
+  // Sur mobile, la page devient scrollable au doigt : la carte ne doit
+  // donc plus capter le geste à 1 doigt (sinon impossible de scroller
+  // en passant par-dessus). Le plugin Leaflet.GestureHandling réserve le
+  // déplacement/zoom de la carte au geste à 2 doigts en tactile, et laisse
+  // le geste à 1 doigt scroller la page normalement. Sur desktop (souris),
+  // rien ne change.
+  const isMobileViewport = window.matchMedia('(max-width: 700px)').matches;
+  map = L.map('map', {zoomControl:true, gestureHandling: isMobileViewport}).setView([45.75, 4.85], 6);
 
   osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -2593,6 +2600,7 @@ document.getElementById('mapExpandBtn').addEventListener('click', () => {
   const layoutEl = document.querySelector('.layout');
   const btn = document.getElementById('mapExpandBtn');
   const expanded = layoutEl.classList.toggle('map-expanded');
+  document.body.classList.toggle('map-fullscreen', expanded);
   btn.innerHTML = expanded ? MAP_COLLAPSE_ICON : MAP_EXPAND_ICON;
   btn.title = expanded ? 'Réduire la carte' : 'Agrandir la carte';
   setTimeout(() => {

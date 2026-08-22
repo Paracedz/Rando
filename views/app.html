@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="Traceur">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/config.js"></script>
 <script src="/pwa.js" defer></script>
@@ -153,6 +155,26 @@
      à l'identique.
      ============================================================ */
   @media (max-width: 700px){
+    /* Toute la page devient scrollable au doigt (au lieu d'un "app shell"
+       à hauteur figée) : la carte passe à une hauteur fixe plutôt que de
+       remplir tout l'espace restant, pour que le reste (étapes, cartes de
+       la barre latérale...) suive naturellement en dessous, accessible en
+       scrollant. Le déplacement de la carte elle-même passe au geste à
+       2 doigts (voir gestureHandling dans initMap()), pour ne pas entrer
+       en conflit avec le scroll de la page à 1 doigt. */
+    body{ height:auto; min-height:100vh; min-height:100dvh; overflow-y:auto; overflow-x:hidden; }
+    .layout{ flex-direction:column; height:auto; overflow:visible; }
+    aside{ width:100%; max-width:none; max-height:none; overflow:visible; border-right:none; border-bottom:1px solid var(--line); }
+    main{ height:auto; overflow:visible; }
+    .map-wrap{ flex:none; height:62vh; min-height:340px; position:relative; }
+
+    /* Carte agrandie ("⛶") : on revient au comportement plein écran
+       verrouillé (comme avant), la page ne doit alors plus scroller. */
+    body.map-fullscreen{ height:100vh; height:100dvh; overflow:hidden; }
+    body.map-fullscreen .layout{ height:100%; overflow:hidden; }
+    body.map-fullscreen main{ height:100%; }
+    body.map-fullscreen .map-wrap{ flex:1; height:auto; min-height:0; }
+
     header.app-header{ padding:0 8px; gap:8px; height:48px; }
     header.app-header .brand h1{ font-size:16px; }
     header.app-header .brand .tagline{ display:none; } /* une seule ligne : pas de place pour la sous-accroche */
@@ -578,7 +600,7 @@
   </aside>
 
   <main>
-    <div style="position:relative; flex:1; min-height:0; width:100%;">
+    <div class="map-wrap" style="position:relative; flex:1; min-height:0; width:100%;">
       <div id="map"></div>
       <div id="mergeInfoBanner" class="merge-banner">
         <span id="mergeInfoBannerText"></span>
