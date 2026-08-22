@@ -143,6 +143,26 @@ window.addEventListener('resize', () => {
 });
 setTimeout(() => map.invalidateSize(), 200);
 
+// La carte (position:absolute dans .map-wrap) ne se recale pas toute seule
+// quand .map-wrap change de taille/position pour une raison qui lui est
+// extérieure — typiquement, sur mobile, quand une carte de la barre
+// latérale (ex. le tableau de découpage en jours) s'agrandit et pousse le
+// reste de la page vers le bas : sans ce recalage, Leaflet continue
+// d'afficher ses tuiles à l'ancien emplacement, qui ne correspond plus à
+// la vraie position de la carte une fois la page reflow. Un
+// ResizeObserver couvre ce cas et tout autre changement de mise en page
+// similaire, sans avoir à corriger chaque déclencheur un par un.
+if('ResizeObserver' in window){
+  const mapWrapEl = document.querySelector('.map-wrap');
+  if(mapWrapEl){
+    let invalidateTimer = null;
+    new ResizeObserver(() => {
+      clearTimeout(invalidateTimer);
+      invalidateTimer = setTimeout(() => map.invalidateSize(), 80);
+    }).observe(mapWrapEl);
+  }
+}
+
 /* ============================================================
    UTILITAIRES GÉO
    ============================================================ */
