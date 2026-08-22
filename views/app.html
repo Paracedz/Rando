@@ -162,17 +162,18 @@
        scrollant. Le déplacement de la carte elle-même passe au geste à
        2 doigts (voir gestureHandling dans initMap()), pour ne pas entrer
        en conflit avec le scroll de la page à 1 doigt. */
-    body{ height:auto; min-height:100vh; min-height:100dvh; overflow-y:auto; overflow-x:hidden; }
-    .layout{ flex-direction:column; height:auto; overflow:visible; }
-    aside{ width:100%; max-width:none; max-height:none; overflow:visible; border-right:none; border-bottom:1px solid var(--line); }
-    main{ height:auto; overflow:visible; }
-    .map-wrap{ flex:none; height:62vh; min-height:340px; position:relative; }
+    body{ display:block; height:auto; min-height:100vh; min-height:100dvh; overflow-y:auto; overflow-x:hidden; }
+    .layout{ display:block; height:auto; overflow:visible; }
+    aside{ display:block; position:static; width:100%; max-width:none; max-height:none; overflow:visible; border-right:none; border-bottom:1px solid var(--line); }
+    main{ display:block; height:auto; overflow:visible; }
+    .map-wrap{ display:block; position:relative; height:62vh; min-height:340px; }
 
     /* Carte agrandie ("⛶") : on revient au comportement plein écran
-       verrouillé (comme avant), la page ne doit alors plus scroller. */
-    body.map-fullscreen{ height:100vh; height:100dvh; overflow:hidden; }
-    body.map-fullscreen .layout{ height:100%; overflow:hidden; }
-    body.map-fullscreen main{ height:100%; }
+       verrouillé (comme avant), la page ne doit alors plus scroller —
+       seul ce mode-là remet le flexbox "app shell" en place. */
+    body.map-fullscreen{ display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+    body.map-fullscreen .layout{ display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+    body.map-fullscreen main{ display:flex; flex-direction:column; flex:1; min-height:0; }
     body.map-fullscreen .map-wrap{ flex:1; height:auto; min-height:0; }
 
     header.app-header{ padding:0 8px; gap:8px; height:48px; }
